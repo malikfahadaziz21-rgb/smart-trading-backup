@@ -12,14 +12,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          lfs: true        # ← this line is the fix
-      
-      - name: Verify MT5 files
-        run: |
-          echo "MT5 folder contents:"
-          ls -lh MT5/
-          echo "MetaEditor64 size:"
-          du -sh MT5/MetaEditor64.exe || echo "FILE MISSING"
+          lfs: true             # critical — downloads actual LFS files not pointers
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -31,6 +24,15 @@ jobs:
           key: ${{ runner.os }}-buildx-${{ hashFiles('Dockerfile') }}
           restore-keys: |
             ${{ runner.os }}-buildx-
+
+      - name: Verify MT5 files before build
+        run: |
+          echo "=== MT5 folder contents ==="
+          ls -lh MT5/
+          echo "=== MetaEditor64 size check ==="
+          du -sh MT5/MetaEditor64.exe || echo "ERROR: MetaEditor64.exe is missing"
+          echo "=== MQL5 folder ==="
+          ls -lh MT5/MQL5/ || echo "ERROR: MQL5 folder missing"
 
       - name: Build Compiler Image
         uses: docker/build-push-action@v5
