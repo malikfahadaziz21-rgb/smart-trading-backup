@@ -24,10 +24,9 @@ if [ $READY -eq 0 ]; then
     exit 1
 fi
 
-# ── 2. Initialize Wine prefix (runtime, not build time) ──────────────────────
+# ── 2. Initialize Wine prefix ─────────────────────────────────────────────────
 echo "[2/6] Initializing Wine prefix..."
 
-# Check if prefix already exists from a cached layer or previous run
 if [ ! -f "$WINEPREFIX/system.reg" ]; then
     echo "      First run — creating prefix..."
     wine wineboot --init
@@ -38,15 +37,15 @@ if [ ! -f "$WINEPREFIX/system.reg" ]; then
     echo "      Wine prefix ready."
 else
     echo "      Prefix already exists, skipping init."
-    # Still need to ping wineserver so it's alive for this session
     wine wineboot 2>/dev/null || true
     wineserver --wait 2>/dev/null || true
 fi
 
-# ── 3. Print wine version for debug visibility ────────────────────────────────
+# ── 3. Wine version confirmation ─────────────────────────────────────────────
 echo "[3/6] Wine version check..."
 wine --version
-wine64 --version
+# wine64 no longer exists as a separate binary in Wine 9+
+# 'wine' handles 64-bit executables like metaeditor64.exe directly
 
 # ── 4. Verify source file exists ─────────────────────────────────────────────
 echo "[4/6] Checking source file..."
@@ -65,14 +64,13 @@ echo "[5/6] Running MetaEditor64..."
 LOG_PATH="/compiler/build.log"
 rm -f "$LOG_PATH"
 
-# MetaEditor returns non-zero even on success — we ignore its exit code
-# and rely entirely on the log content
-wine64 /compiler/MT5/metaeditor64.exe \
+# wine64 no longer exists — 'wine' handles 64-bit executables directly
+wine /compiler/MT5/metaeditor64.exe \
     /compile:"Z:\compiler\scripts\test_script.mq5" \
     /log:"Z:\compiler\build.log" \
     /portable 2>/dev/null || true
 
-# Wait for MetaEditor to fully flush and release the log file
+# Poll for log file appearance instead of bare sleep
 echo "      Waiting for MetaEditor to finish writing log..."
 for i in $(seq 1 15); do
     if [ -f "$LOG_PATH" ]; then

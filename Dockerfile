@@ -33,8 +33,6 @@ RUN mkdir -pm 755 /etc/apt/keyrings && \
     apt-get update
 
 # ── Step 3: Install Wine packages EXPLICITLY ─────────────────────────────────
-# We name each package directly instead of relying on --install-recommends
-# to resolve them. This is what actually prevents the kernel32.dll error.
 RUN apt-get install -y --no-install-recommends \
         winehq-stable \
         wine-stable \
@@ -48,7 +46,6 @@ RUN wget -q -O /usr/local/bin/winetricks \
     chmod +x /usr/local/bin/winetricks
 
 # ── Step 5: ENV — all in one instruction ────────────────────────────────────
-# PATH and LD_LIBRARY_PATH must be set BEFORE any wine commands run
 ENV PATH="/opt/wine-stable/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
     LD_LIBRARY_PATH="/opt/wine-stable/lib:/opt/wine-stable/lib64" \
     WINEDEBUG=-all \
@@ -62,8 +59,9 @@ COPY ./scripts  /compiler/scripts
 COPY compile.sh /compiler/compile.sh
 RUN chmod +x /compiler/compile.sh
 
-# ── Step 6: Verify wine binary is actually found and runs ───────────────────
-# This will catch broken installs at build time with a clear error
-RUN wine --version && wine64 --version
+# ── Step 6: Verify wine binary works ────────────────────────────────────────
+# wine64 no longer exists as a separate binary in Wine 9+
+# 'wine' handles both 32 and 64-bit executables directly
+RUN wine --version
 
 ENTRYPOINT ["/bin/bash", "/compiler/compile.sh"]
