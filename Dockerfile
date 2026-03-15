@@ -13,9 +13,9 @@ RUN dpkg --add-architecture i386 && \
     libgl1-mesa-dri \
     && apt-get clean
 
-# 2. Install Wine 9.0 (Stable) from WineHQ
+# 2. Install Wine 9.0 (Stable) from WineHQ with corrected URLs
 RUN mkdir -pm 755 /etc/apt/keyrings && \
-    wget -O /etc/apt/keyrings/winehq-archive.key https://dl.winehq.org/wine-builds/winehq.gpg && \
+    wget -O /etc/apt/keyrings/winehq-archive.key https://dl.winehq.org/wine-builds/winehq.key && \
     wget -NP /etc/apt/sources.list.d/ https://dl.winehq.org/wine-builds/ubuntu/dists/jammy/winehq-jammy.sources && \
     apt-get update && \
     apt-get install --install-recommends -y winehq-stable && \
@@ -29,7 +29,7 @@ COPY compile.sh /compiler/compile.sh
 
 RUN chmod +x /compiler/compile.sh
 
-# Set environment variables to stop Wine from asking questions
+# Set environment variables
 ENV WINEDEBUG=-all
 ENV WINEPREFIX=/root/.wine
 ENV WINEARCH=win64
