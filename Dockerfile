@@ -13,7 +13,7 @@ RUN dpkg --add-architecture i386 && \
     libgl1-mesa-dri \
     && apt-get clean
 
-# 2. Install Wine 9.0 (Stable) from WineHQ with corrected URLs
+# 2. Install Wine 9.0 (Stable) from WineHQ
 RUN mkdir -pm 755 /etc/apt/keyrings && \
     wget -O /etc/apt/keyrings/winehq-archive.key https://dl.winehq.org/wine-builds/winehq.key && \
     wget -NP /etc/apt/sources.list.d/ https://dl.winehq.org/wine-builds/ubuntu/dists/jammy/winehq-jammy.sources && \
@@ -21,7 +21,10 @@ RUN mkdir -pm 755 /etc/apt/keyrings && \
     apt-get install --install-recommends -y winehq-stable && \
     apt-get clean
 
-# 3. Setup work directory
+# 3. FIX THE PATH: Tell the system where Wine is located
+ENV PATH="/opt/wine-stable/bin:${PATH}"
+
+# 4. Setup work directory
 WORKDIR /compiler
 COPY ./MT5 /compiler/MT5
 COPY ./scripts /compiler/scripts

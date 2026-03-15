@@ -1,23 +1,28 @@
 #!/bin/bash
 
+# Ensure we are in the right folder
+cd /compiler
+
 echo "Initializing Wine environment..."
-# Silently initialize wine without a UI
-xvfb-run -a wineboot --init
+# We use 'wine' instead of 'wine64' as it's the standard wrapper in WineHQ 9.0
+xvfb-run -a wine wineboot --init
+sleep 3
 
-echo "Starting Compilation..."
+echo "Starting MetaEditor Compilation..."
 
-# Run MetaEditor
-# /log MUST be a Windows path. Z: is the Linux root in Wine.
-xvfb-run -a wine64 /compiler/MT5/metaeditor64.exe \
+# Run compilation
+# We point to the absolute path of the exe just to be 100% sure
+xvfb-run -a wine /compiler/MT5/metaeditor64.exe \
     /compile:"Z:\compiler\scripts\test_script.mq5" \
     /log:"Z:\compiler\build.log"
 
-# Give it 5 seconds to finish writing the file
+# Give it time to write the file
 sleep 5
 
 if [ -f "build.log" ]; then
     echo "--- COMPILATION LOG START ---"
-    cat build.log
+    # Convert from UTF-16 (MetaEditor format) to UTF-8 so we can read it in Linux
+    iconv -f UTF-16 -t UTF-8 build.log || cat build.log
     echo "--- COMPILATION LOG END ---"
 
     if grep -q "0 errors" build.log; then
@@ -28,6 +33,6 @@ if [ -f "build.log" ]; then
         exit 1
     fi
 else
-    echo "ERROR: MetaEditor crashed or build.log was not created."
+    echo "ERROR: MetaEditor failed to generate build.log"
     exit 1
 fi
