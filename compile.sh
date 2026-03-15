@@ -1,98 +1,125 @@
 #!/bin/bash
-# Strict mode: exit on error, treat unset vars as errors, pipe failures matter
 set -euo pipefail
 
 cd /compiler
 
-# ── 1. Start a fresh Xvfb display ───────────────────────────────────────────
-echo "[1/5] Starting Xvfb virtual display..."
-Xvfb :99 -screen 0 1024x768x24 -ac &
+# ── 1. Start Xvfb ────────────────────────────────────────────────────────────
+echo "[1/6] Starting Xvfb virtual display on :99..."
+Xvfb :99 -screen 0 1024x768x24 -ac +extension GLX +render -noreset &
 XVFB_PID=$!
-export DISPLAY=:99
 
-# Wait until Xvfb is actually responding — don't trust sleep
-for i in $(seq 1 15); do
+# Poll until Xvfb is actually ready — never trust a bare sleep
+READY=0
+for i in $(seq 1 20); do
     if xdpyinfo -display :99 >/dev/null 2>&1; then
-        echo "      Xvfb is ready (after ${i}s)"
+        echo "      Xvfb ready after ${i}s"
+        READY=1
         break
-    fi
-    if [ $i -eq 15 ]; then
-        echo "ERROR: Xvfb never became ready. Aborting."
-        exit 1
     fi
     sleep 1
 done
 
-# ── 2. Verify wineserver is operational ─────────────────────────────────────
-echo "[2/5] Verifying Wine environment..."
-wine --version
-# The prefix was pre-baked in the Docker image so no wineboot needed here.
-# Just ping the wineserver to make sure it's alive.
-wineserver --wait 2>/dev/null || true
+if [ $READY -eq 0 ]; then
+    echo "ERROR: Xvfb never became ready after 20s. Aborting."
+    exit 1
+fi
 
-# ── 3. Confirm script exists before handing off to MetaEditor ───────────────
-echo "[3/5] Checking source file..."
+# ── 2. Initialize Wine prefix (runtime, not build time) ──────────────────────
+echo "[2/6] Initializing Wine prefix..."
+
+# Check if prefix already exists from a cached layer or previous run
+if [ ! -f "$WINEPREFIX/system.reg" ]; then
+    echo "      First run — creating prefix..."
+    wine wineboot --init
+    wineserver --wait
+    echo "      Installing required runtimes via winetricks..."
+    winetricks -q corefonts vcrun2019
+    wineserver --wait
+    echo "      Wine prefix ready."
+else
+    echo "      Prefix already exists, skipping init."
+    # Still need to ping wineserver so it's alive for this session
+    wine wineboot 2>/dev/null || true
+    wineserver --wait 2>/dev/null || true
+fi
+
+# ── 3. Print wine version for debug visibility ────────────────────────────────
+echo "[3/6] Wine version check..."
+wine --version
+wine64 --version
+
+# ── 4. Verify source file exists ─────────────────────────────────────────────
+echo "[4/6] Checking source file..."
 SCRIPT_PATH="/compiler/scripts/test_script.mq5"
+
 if [ ! -f "$SCRIPT_PATH" ]; then
-    echo "ERROR: $SCRIPT_PATH not found."
+    echo "ERROR: Source file not found at $SCRIPT_PATH"
     echo "       Contents of /compiler/scripts/:"
-    ls -la /compiler/scripts/ || echo "       (directory is empty or missing)"
+    ls -la /compiler/scripts/ 2>/dev/null || echo "       (directory missing)"
     exit 1
 fi
 echo "      Found: $SCRIPT_PATH"
 
-# ── 4. Run MetaEditor ────────────────────────────────────────────────────────
-echo "[4/5] Running MetaEditor64..."
+# ── 5. Run MetaEditor ─────────────────────────────────────────────────────────
+echo "[5/6] Running MetaEditor64..."
 LOG_PATH="/compiler/build.log"
-
-# Remove stale log from a previous run just in case
 rm -f "$LOG_PATH"
 
+# MetaEditor returns non-zero even on success — we ignore its exit code
+# and rely entirely on the log content
 wine64 /compiler/MT5/metaeditor64.exe \
     /compile:"Z:\compiler\scripts\test_script.mq5" \
     /log:"Z:\compiler\build.log" \
-    /portable || true
-# We use '|| true' because MetaEditor returns non-zero exit codes
-# even on successful compilation — we rely on the log content instead.
+    /portable 2>/dev/null || true
 
-# Give MetaEditor time to flush and close the log file
-sleep 8
+# Wait for MetaEditor to fully flush and release the log file
+echo "      Waiting for MetaEditor to finish writing log..."
+for i in $(seq 1 15); do
+    if [ -f "$LOG_PATH" ]; then
+        echo "      Log appeared after ${i}s"
+        break
+    fi
+    sleep 1
+done
 
-# ── 5. Parse the log and report ─────────────────────────────────────────────
-echo "[5/5] Parsing compilation log..."
+# Extra settle time for file handle release
+sleep 3
+
+# ── 6. Parse and report ───────────────────────────────────────────────────────
+echo "[6/6] Parsing build log..."
 
 if [ ! -f "$LOG_PATH" ]; then
     echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "ERROR: build.log was never created."
-    echo "This usually means MetaEditor crashed before"
-    echo "it could read the source file."
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  ERROR: build.log was never created by MetaEditor."
     echo ""
-    echo "Possible causes:"
-    echo "  • metaeditor64.exe path is wrong"
-    echo "  • Wine prefix is corrupt"
-    echo "  • Missing Visual C++ runtime (vcrun2019)"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  This means MetaEditor crashed before compiling."
+    echo "  Most common causes:"
+    echo "    1. metaeditor64.exe path is wrong in /compiler/MT5/"
+    echo "    2. Wine prefix initialization failed above"
+    echo "    3. Missing vcrun2019 / Visual C++ runtime"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     kill $XVFB_PID 2>/dev/null || true
     exit 1
 fi
 
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━ COMPILATION LOG ━━━━━━━━━━━━━━━━━━━━━━"
-# MetaEditor writes UTF-16LE — try that first, fall back gracefully
-iconv -f UTF-16LE -t UTF-8 "$LOG_PATH" 2>/dev/null \
+# Decode UTF-16LE log (MetaEditor always writes this encoding)
+DECODED_LOG=$(iconv -f UTF-16LE -t UTF-8 "$LOG_PATH" 2>/dev/null \
     || iconv -f UTF-16 -t UTF-8 "$LOG_PATH" 2>/dev/null \
-    || cat "$LOG_PATH"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    || cat "$LOG_PATH")
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━ COMPILATION LOG ━━━━━━━━━━━━━━━━━━━━━"
+echo "$DECODED_LOG"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-# Case-insensitive match; MetaEditor writes "0 error(s)" or "0 errors"
-if iconv -f UTF-16LE -t UTF-8 "$LOG_PATH" 2>/dev/null | grep -qi "0 error"; then
-    echo "✅ RESULT: COMPILATION SUCCEEDED"
-    kill $XVFB_PID 2>/dev/null || true
+kill $XVFB_PID 2>/dev/null || true
+
+if echo "$DECODED_LOG" | grep -qi "0 error"; then
+    echo "✅  RESULT: COMPILATION SUCCEEDED"
     exit 0
 else
-    echo "❌ RESULT: COMPILATION FAILED — see log above"
-    kill $XVFB_PID 2>/dev/null || true
+    echo "❌  RESULT: COMPILATION FAILED — see log above"
     exit 1
 fi
