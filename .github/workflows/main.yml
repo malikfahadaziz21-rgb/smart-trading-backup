@@ -1,0 +1,15 @@
+name: MQL5 Auto-Compile Check
+
+on: [push]
+
+jobs:
+  test_compilation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Build and Run Compiler
+        run: |
+          docker build -t mql-compiler .
+          docker run mql-compiler
