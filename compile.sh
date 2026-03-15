@@ -70,10 +70,10 @@ rm -f "$LOG_PATH"
 
 # /portable makes MetaEditor treat its own exe directory as the MT5 data folder
 # so C:\MT5 = /compiler/MT5 inside the container
-timeout 120 wine /compiler/MT5/metaeditor64.exe \
+timeout 120 wine /compiler/MT5/MetaEditor64.exe \
     /compile:"C:\MT5\MQL5\Scripts\test_script.mq5" \
     /log:"C:\MT5\build.log" \
-    /portable || true
+    /portable
 
 # ── 6. Parse and report ───────────────────────────────────────────────────────
 echo "[6/6] Parsing build log..."
