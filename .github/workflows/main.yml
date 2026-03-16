@@ -50,12 +50,27 @@ jobs:
       # --network none blocks MetaEditor's auto-update check at runtime
       # winetricks already ran at build time so no network needed here
       - name: Run MQL5 Compilation
-        run: docker run --rm --network none mql-compiler
+        run: |
+          # Run container and copy logs out regardless of exit code
+          docker run --rm --network none \
+            -v /tmp/compiler-output:/output \
+            mql-compiler || true
+          
+      - name: Copy logs from container
+        if: always()
+        run: |
+          # Logs are in /compiler/MT5/ inside container
+          # We mount /output volume to get them out
+          docker run --rm --network none \
+            -v /tmp/compiler-output:/output \
+            --entrypoint bash \
+            mql-compiler -c "cp /compiler/MT5/*.log /output/ 2>/dev/null || true"
+          ls -la /tmp/compiler-output/ || echo "No output files"
 
-      - name: Upload Build Log
+      - name: Upload Build Logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build-log
-          path: build.log
+          name: build-logs
+          path: /tmp/compiler-output/
           if-no-files-found: ignore

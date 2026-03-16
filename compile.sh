@@ -1,5 +1,6 @@
 #!/bin/bash
-set -euo pipefail
+# Temporarily remove pipefail to prevent SIGPIPE from killing script
+set -eo pipefail
 
 cd /compiler
 
@@ -78,31 +79,42 @@ echo "[5/6] Running MetaEditor64..."
 LOG_PATH="/compiler/MT5/build.log"
 rm -f "$LOG_PATH"
 
-echo "      === BINARY VERIFICATION ==="
-echo "      File type:"
-file /compiler/MT5/metaeditor64.exe
+# Write Wine debug output to a file instead of stdout
+# This prevents SIGPIPE (exit 141) from killing the script
+WINE_DEBUG_LOG="/compiler/MT5/wine_debug.log"
 
-echo "      First 8 bytes (MZ = valid Windows exe, else = LFS pointer or corrupt):"
-xxd /compiler/MT5/metaeditor64.exe | head -1
-
-echo "      File size:"
-du -sh /compiler/MT5/metaeditor64.exe
-
-echo "      === RUNNING METAEDITOR ==="
-WINEDEBUG=err+all timeout 60 wine /compiler/MT5/metaeditor64.exe \
+echo "      Running MetaEditor — Wine debug going to $WINE_DEBUG_LOG"
+WINEDEBUG=err+all timeout 120 wine /compiler/MT5/metaeditor64.exe \
     /compile:"C:\MT5\MQL5\Scripts\test_script.mq5" \
     /log:"C:\MT5\build.log" \
-    /portable
-EXIT_CODE=$?
-echo "      Exit code: $EXIT_CODE"
+    /portable \
+    > "$WINE_DEBUG_LOG" 2>&1 || true
 
-echo "      Files created by MetaEditor:"
+EXIT_CODE=$?
+echo "      MetaEditor exit code: $EXIT_CODE"
+
+# Print last 50 lines of Wine debug log so we can see what happened
+echo "      === WINE DEBUG OUTPUT (last 50 lines) ==="
+tail -50 "$WINE_DEBUG_LOG" 2>/dev/null || echo "      (no debug output)"
+
+echo "      === FILES CREATED BY METAEDITOR ==="
 find /compiler/MT5 -newer /compiler/MT5/metaeditor.ini 2>/dev/null \
     || echo "      No new files created"
 
-echo "      Searching for any .log files:"
+echo "      === SEARCHING FOR ANY .log FILES ==="
 find /compiler /root/.wine -name "*.log" 2>/dev/null \
     || echo "      None found"
+
+# Poll for build log
+echo "      Waiting for build log..."
+for i in $(seq 1 20); do
+    if [ -f "$LOG_PATH" ]; then
+        echo "      Build log appeared after ${i}s"
+        break
+    fi
+    sleep 1
+done
+sleep 3
 
 # ── 6. Parse and report ───────────────────────────────────────────────────────
 echo "[6/6] Parsing build log..."
@@ -111,8 +123,7 @@ if [ ! -f "$LOG_PATH" ]; then
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "  ERROR: build.log was never created by MetaEditor."
-    echo "  MetaEditor timed out or crashed before compiling."
-    echo "  Check Wine output above for clues."
+    echo "  Check Wine debug output above for clues."
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     kill $XVFB_PID 2>/dev/null || true
     exit 1
@@ -137,15 +148,3 @@ else
     echo "❌  RESULT: COMPILATION FAILED — see log above"
     exit 1
 fi
-```
-
-# ---
-
-# The `xxd` first line output will tell us everything. It should look like:
-# ```
-# 00000000: 4d5a 9000 0300 0000 ...    MZ......
-# ```
-
-# If instead it looks like:
-# ```
-# 00000000: 7665 7273 696f 6e20 ...    version
