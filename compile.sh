@@ -80,22 +80,36 @@ echo "[5/6] Running MetaEditor64..."
 LOG_PATH="/compiler/MT5/build.log"
 rm -f "$LOG_PATH"
 
-# Network is blocked via --network none in docker run
-# so MetaEditor's update check fails instantly instead of hanging
-timeout 180 wine /compiler/MT5/MetaEditor64.exe \
+echo "      Verifying exe exists:"
+ls -lh /compiler/MT5/metaeditor64.exe || echo "ERROR: exe not found at this path"
+
+# Use exact lowercase filename as it appears in the container
+timeout 180 wine /compiler/MT5/metaeditor64.exe \
     /compile:"C:\MT5\MQL5\Scripts\test_script.mq5" \
     /log:"C:\MT5\build.log" \
     /portable || true
 
 echo "      MetaEditor exited, checking for log..."
+
+# Check both possible log locations MetaEditor might write to
 for i in $(seq 1 20); do
     if [ -f "$LOG_PATH" ]; then
-        echo "      Log appeared after ${i}s"
+        echo "      Log found at /compiler/MT5/build.log after ${i}s"
+        break
+    fi
+    # MetaEditor sometimes writes log next to the script instead
+    if [ -f "/compiler/MT5/MQL5/Scripts/test_script.log" ]; then
+        echo "      Log found at Scripts folder after ${i}s"
+        cp /compiler/MT5/MQL5/Scripts/test_script.log "$LOG_PATH"
         break
     fi
     sleep 1
 done
 sleep 3
+
+# Debug — show everything in MT5 folder after MetaEditor ran
+echo "      MT5 folder after MetaEditor run:"
+find /compiler/MT5 -name "*.log" 2>/dev/null || echo "      No .log files found anywhere"
 
 # ── 6. Parse and report ───────────────────────────────────────────────────────
 echo "[6/6] Parsing build log..."
