@@ -73,24 +73,20 @@ fi
 
 cp "$SCRIPT_SRC" /compiler/MT5/MQL5/Scripts/test_script.mq5
 echo "      Script staged at: /compiler/MT5/MQL5/Scripts/test_script.mq5"
-
 # ── 5. Run MetaEditor ─────────────────────────────────────────────────────────
 echo "[5/6] Running MetaEditor64..."
-
-mkdir -p /compiler/MT5/MQL5/Logs
-LOG_PATH="/compiler/MT5/MQL5/Logs/build.log"
-rm -f "$LOG_PATH"
 
 WINE_DEBUG_LOG="/compiler/MT5/wine_debug.log"
 rm -f "$WINE_DEBUG_LOG"
 
+# Record timestamp so we can find files created by this run
+touch /tmp/before_run
+
 echo "      Running MetaEditor..."
-# Z:\ is Wine's automatic mapping of the Linux filesystem root /
-# So /compiler/MT5/ = Z:\compiler\MT5\ in Wine
-# /portable tells MetaEditor to use its own directory as the data root
+# Remove /log flag — let MetaEditor write to its default location
+# We'll find it by searching for new files after the run
 timeout 120 wine /compiler/MT5/metaeditor64.exe \
     /compile:"Z:\compiler\MT5\MQL5\Scripts\test_script.mq5" \
-    /log:"Z:\compiler\MT5\MQL5\Logs\build.log" \
     /portable \
     > "$WINE_DEBUG_LOG" 2>&1 || true
 
@@ -98,38 +94,74 @@ EXIT_CODE=$?
 echo "      MetaEditor exit code: $EXIT_CODE"
 
 echo "      === WINE DEBUG LOG ==="
-cat "$WINE_DEBUG_LOG" 2>/dev/null || echo "      (empty)"
+cat "$WINE_DEBUG_LOG" 2>/dev/null || echo "      (empty — good, means no Wine errors)"
 
-echo "      === FILES CREATED AFTER RUN ==="
-find /compiler/MT5/MQL5/Logs -type f 2>/dev/null || echo "      Logs folder empty"
+echo "      === ALL NEW FILES CREATED SINCE RUN STARTED ==="
+find / -newer /tmp/before_run -type f 2>/dev/null \
+    | grep -v /proc \
+    | grep -v /sys \
+    | grep -v /tmp/before_run \
+    | grep -v "$WINE_DEBUG_LOG"
 
-# Copy logs to output volume
+echo "      === SEARCHING FOR .ex5 COMPILED OUTPUT ==="
+find / -name "*.ex5" -newer /tmp/before_run 2>/dev/null | grep -v /proc || echo "      No .ex5 files created"
+
+echo "      === SEARCHING FOR ANY NEW .log FILES ==="
+find / -name "*.log" -newer /tmp/before_run 2>/dev/null | grep -v /proc || echo "      No new .log files"
+
+# Copy everything to output volume
 cp "$WINE_DEBUG_LOG" /output/wine_debug.log 2>/dev/null || true
-cp "$LOG_PATH" /output/build.log 2>/dev/null || true
+find / -name "*.log" -newer /tmp/before_run 2>/dev/null \
+    | grep -v /proc \
+    | xargs -I{} cp {} /output/ 2>/dev/null || true
+find / -name "*.ex5" -newer /tmp/before_run 2>/dev/null \
+    | grep -v /proc \
+    | xargs -I{} cp {} /output/ 2>/dev/null || true
 
-echo "      Waiting for build log..."
-for i in $(seq 1 20); do
-    if [ -f "$LOG_PATH" ]; then
-        echo "      Build log appeared after ${i}s"
-        break
-    fi
-    sleep 1
-done
-sleep 3
+sleep 5
 # ── 6. Parse and report ───────────────────────────────────────────────────────
 echo "[6/6] Parsing build log..."
 
-if [ ! -f "$LOG_PATH" ]; then
+# MetaEditor default log locations to check
+POSSIBLE_LOGS=(
+    "/compiler/MT5/MQL5/Logs/build.log"
+    "/compiler/MT5/logs/build.log"
+    "/compiler/MT5/MQL5/Scripts/test_script.log"
+    "/root/.wine/drive_c/MT5/MQL5/Logs/build.log"
+)
+
+LOG_PATH=""
+for path in "${POSSIBLE_LOGS[@]}"; do
+    if [ -f "$path" ]; then
+        echo "      Found log at: $path"
+        LOG_PATH="$path"
+        break
+    fi
+done
+
+# Also check any newly created log file
+if [ -z "$LOG_PATH" ]; then
+    LOG_PATH=$(find / -name "*.log" -newer /tmp/before_run 2>/dev/null \
+        | grep -v /proc \
+        | grep -v wine_debug \
+        | grep -v winetricks \
+        | grep -v vcredist \
+        | head -1)
+fi
+
+if [ -z "$LOG_PATH" ] || [ ! -f "$LOG_PATH" ]; then
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "  ERROR: build.log was never created by MetaEditor."
-    echo "  MetaEditor ran (exit 0) but produced no output."
-    echo "  See WINE DEBUG LOG above for exact reason."
+    echo "  ERROR: No build log found anywhere."
+    echo "  MetaEditor ran cleanly (exit 0, no Wine errors)"
+    echo "  but wrote no output files."
+    echo "  Check the NEW FILES list above to find where it wrote."
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     kill $XVFB_PID 2>/dev/null || true
     exit 1
 fi
 
+echo "      Using log: $LOG_PATH"
 DECODED_LOG=$(iconv -f UTF-16LE -t UTF-8 "$LOG_PATH" 2>/dev/null \
     || iconv -f UTF-16 -t UTF-8 "$LOG_PATH" 2>/dev/null \
     || cat "$LOG_PATH")
