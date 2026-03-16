@@ -85,23 +85,25 @@ WINE_DEBUG_LOG="/compiler/MT5/wine_debug.log"
 rm -f "$WINE_DEBUG_LOG"
 
 echo "      Running MetaEditor..."
-WINEDEBUG=err+all timeout 120 wine /compiler/MT5/metaeditor64.exe \
-    /compile:"C:\MT5\MQL5\Scripts\test_script.mq5" \
-    /log:"C:\MT5\MQL5\Logs\build.log" \
+# Z:\ is Wine's automatic mapping of the Linux filesystem root /
+# So /compiler/MT5/ = Z:\compiler\MT5\ in Wine
+# /portable tells MetaEditor to use its own directory as the data root
+timeout 120 wine /compiler/MT5/metaeditor64.exe \
+    /compile:"Z:\compiler\MT5\MQL5\Scripts\test_script.mq5" \
+    /log:"Z:\compiler\MT5\MQL5\Logs\build.log" \
     /portable \
     > "$WINE_DEBUG_LOG" 2>&1 || true
 
 EXIT_CODE=$?
 echo "      MetaEditor exit code: $EXIT_CODE"
 
-# Print wine debug log directly to stdout so we can see it in Actions
-echo "      === FULL WINE DEBUG LOG ==="
-cat "$WINE_DEBUG_LOG" 2>/dev/null || echo "      (wine_debug.log is empty)"
+echo "      === WINE DEBUG LOG ==="
+cat "$WINE_DEBUG_LOG" 2>/dev/null || echo "      (empty)"
 
-echo "      === ALL FILES IN MT5 AFTER RUN ==="
-find /compiler/MT5 -type f 2>/dev/null
+echo "      === FILES CREATED AFTER RUN ==="
+find /compiler/MT5/MQL5/Logs -type f 2>/dev/null || echo "      Logs folder empty"
 
-# Copy logs to mounted output volume
+# Copy logs to output volume
 cp "$WINE_DEBUG_LOG" /output/wine_debug.log 2>/dev/null || true
 cp "$LOG_PATH" /output/build.log 2>/dev/null || true
 
