@@ -74,43 +74,35 @@ fi
 
 cp "$SCRIPT_SRC" /compiler/MT5/MQL5/Scripts/test_script.mq5
 echo "      Script staged at: /compiler/MT5/MQL5/Scripts/test_script.mq5"
-
 # ── 5. Run MetaEditor ─────────────────────────────────────────────────────────
 echo "[5/6] Running MetaEditor64..."
 LOG_PATH="/compiler/MT5/build.log"
 rm -f "$LOG_PATH"
 
-echo "      Verifying exe exists:"
-ls -lh /compiler/MT5/metaeditor64.exe || echo "ERROR: exe not found at this path"
+echo "      === FULL DEBUG MODE ==="
 
-# Use exact lowercase filename as it appears in the container
-timeout 180 wine /compiler/MT5/metaeditor64.exe \
+echo "      Exact filename in container:"
+ls -lh /compiler/MT5/*.exe
+
+echo "      File type check:"
+file /compiler/MT5/metaeditor64.exe
+
+echo "      First 4 bytes (should be MZ for valid Windows exe):"
+xxd /compiler/MT5/metaeditor64.exe | head -2
+
+echo "      Running MetaEditor with full Wine debug..."
+WINEDEBUG=err+all timeout 60 wine /compiler/MT5/metaeditor64.exe \
     /compile:"C:\MT5\MQL5\Scripts\test_script.mq5" \
     /log:"C:\MT5\build.log" \
-    /portable || true
+    /portable
+EXIT_CODE=$?
+echo "      MetaEditor exit code: $EXIT_CODE"
 
-echo "      MetaEditor exited, checking for log..."
+echo "      Searching entire container for any log files:"
+find /compiler /root/.wine -name "*.log" 2>/dev/null || echo "      None found"
 
-# Check both possible log locations MetaEditor might write to
-for i in $(seq 1 20); do
-    if [ -f "$LOG_PATH" ]; then
-        echo "      Log found at /compiler/MT5/build.log after ${i}s"
-        break
-    fi
-    # MetaEditor sometimes writes log next to the script instead
-    if [ -f "/compiler/MT5/MQL5/Scripts/test_script.log" ]; then
-        echo "      Log found at Scripts folder after ${i}s"
-        cp /compiler/MT5/MQL5/Scripts/test_script.log "$LOG_PATH"
-        break
-    fi
-    sleep 1
-done
-sleep 3
-
-# Debug — show everything in MT5 folder after MetaEditor ran
-echo "      MT5 folder after MetaEditor run:"
-find /compiler/MT5 -name "*.log" 2>/dev/null || echo "      No .log files found anywhere"
-
+echo "      Searching for any file MetaEditor may have written:"
+find /compiler/MT5 -newer /compiler/MT5/metaeditor.ini 2>/dev/null || echo "      No new files created"
 # ── 6. Parse and report ───────────────────────────────────────────────────────
 echo "[6/6] Parsing build log..."
 
