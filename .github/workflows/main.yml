@@ -12,7 +12,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          lfs: true             # critical — downloads actual LFS files not pointers
+          lfs: true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -31,8 +31,6 @@ jobs:
           ls -lh MT5/
           echo "=== MetaEditor64 size check ==="
           du -sh MT5/MetaEditor64.exe || echo "ERROR: MetaEditor64.exe is missing"
-          echo "=== MQL5 folder ==="
-          ls -lh MT5/MQL5/ || echo "ERROR: MQL5 folder missing"
 
       - name: Build Compiler Image
         uses: docker/build-push-action@v5
@@ -49,6 +47,8 @@ jobs:
           rm -rf /tmp/.buildx-cache
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache
 
+      # --network none blocks MetaEditor's auto-update check at runtime
+      # winetricks already ran at build time so no network needed here
       - name: Run MQL5 Compilation
         run: docker run --rm --network none mql-compiler
 

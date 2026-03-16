@@ -23,27 +23,12 @@ if [ $READY -eq 0 ]; then
     exit 1
 fi
 
-# ── 2. Initialize Wine prefix ─────────────────────────────────────────────────
-echo "[2/6] Initializing Wine prefix..."
-
-if [ ! -f "$WINEPREFIX/system.reg" ]; then
-    echo "      First run — creating Wine prefix..."
-    wineboot
-    wineserver --wait
-
-    wine reg add "HKCU\\Software\\Wine\\WineDbg" /v ShowCrashDialog /t REG_DWORD /d 0 /f 2>/dev/null || true
-    wine reg add "HKCU\\Software\\Wine" /v Version /t REG_SZ /d "win10" /f 2>/dev/null || true
-    wineserver --wait
-
-    echo "      Installing Visual C++ runtime and fonts..."
-    winetricks -q corefonts vcrun2019
-    wineserver --wait
-    echo "      Wine prefix ready."
-else
-    echo "      Prefix exists — skipping init."
-    wineboot 2>/dev/null || true
-    wineserver --wait 2>/dev/null || true
-fi
+# ── 2. Start Wine server ──────────────────────────────────────────────────────
+# Prefix is already pre-baked in the Docker image — just wake the wineserver
+echo "[2/6] Starting Wine server..."
+wineboot 2>/dev/null || true
+wineserver --wait 2>/dev/null || true
+echo "      Wine server ready."
 
 # ── 3. Wine version confirmation ─────────────────────────────────────────────
 echo "[3/6] Wine version: $(wine --version)"
@@ -60,12 +45,11 @@ mkdir -p /compiler/MT5/MQL5/Files
 mkdir -p /compiler/MT5/logs
 mkdir -p /compiler/MT5/config
 
-# Copy ini file to disable auto-update and news — prevents first-launch hang
-# MetaEditor looks for this file in the same directory as the exe
+# Ensure metaeditor.ini exists to disable auto-update
 if [ -f "/compiler/MT5/metaeditor.ini" ]; then
-    echo "      metaeditor.ini found — auto-update will be disabled."
+    echo "      metaeditor.ini found — auto-update disabled."
 else
-    echo "      WARNING: metaeditor.ini not found — creating default one..."
+    echo "      Creating metaeditor.ini to disable auto-update..."
     cat > /compiler/MT5/metaeditor.ini << 'EOF'
 [Common]
 NewsEnable=0
@@ -77,12 +61,10 @@ AutoUpdate=0
 EOF
 fi
 
-echo "      MQL5 folder structure verified."
 echo "      MT5 directory contents:"
 ls -lh /compiler/MT5/
 
 SCRIPT_SRC="/compiler/scripts/test_script.mq5"
-
 if [ ! -f "$SCRIPT_SRC" ]; then
     echo "ERROR: Source file not found at $SCRIPT_SRC"
     ls -la /compiler/scripts/ 2>/dev/null || echo "       (directory missing)"
@@ -98,15 +80,14 @@ echo "[5/6] Running MetaEditor64..."
 LOG_PATH="/compiler/MT5/build.log"
 rm -f "$LOG_PATH"
 
-# 180s timeout — extra headroom for Wine startup overhead
-# No 2>/dev/null so we see all Wine output for debugging
+# Network is blocked via --network none in docker run
+# so MetaEditor's update check fails instantly instead of hanging
 timeout 180 wine /compiler/MT5/MetaEditor64.exe \
     /compile:"C:\MT5\MQL5\Scripts\test_script.mq5" \
     /log:"C:\MT5\build.log" \
     /portable || true
 
 echo "      MetaEditor exited, checking for log..."
-
 for i in $(seq 1 20); do
     if [ -f "$LOG_PATH" ]; then
         echo "      Log appeared after ${i}s"
@@ -123,7 +104,6 @@ if [ ! -f "$LOG_PATH" ]; then
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "  ERROR: build.log was never created by MetaEditor."
-    echo ""
     echo "  MetaEditor timed out or crashed before compiling."
     echo "  Check Wine output above for clues."
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

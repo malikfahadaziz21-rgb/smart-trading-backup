@@ -22,6 +22,20 @@ ENV WINEDEBUG=-all \
     WINEARCH=win64 \
     DISPLAY=:99
 
+# ── Pre-bake Wine prefix at BUILD time ───────────────────────────────────────
+# Build time has full network access so winetricks can download fonts/runtimes
+# This also means runtime startup is instant — prefix already exists
+RUN Xvfb :99 -screen 0 1024x768x24 -ac +extension GLX +render -noreset & \
+    sleep 4 && \
+    wineboot && \
+    wineserver --wait && \
+    wine reg add "HKCU\\Software\\Wine\\WineDbg" /v ShowCrashDialog /t REG_DWORD /d 0 /f && \
+    wine reg add "HKCU\\Software\\Wine" /v Version /t REG_SZ /d "win10" /f && \
+    wineserver --wait && \
+    winetricks -q corefonts vcrun2019 && \
+    wineserver --wait && \
+    echo "Wine prefix pre-baked successfully"
+
 RUN wine --version
 
 WORKDIR /compiler
