@@ -11,6 +11,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         fonts-liberation \
         fonts-freefont-ttf \
         p7zip-full \
+        file \
+        xxd \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN wget -q -O /usr/local/bin/winetricks \
@@ -22,9 +24,6 @@ ENV WINEDEBUG=-all \
     WINEARCH=win64 \
     DISPLAY=:99
 
-# ── Pre-bake Wine prefix at BUILD time ───────────────────────────────────────
-# Build time has full network access so winetricks can download fonts/runtimes
-# This also means runtime startup is instant — prefix already exists
 RUN Xvfb :99 -screen 0 1024x768x24 -ac +extension GLX +render -noreset & \
     sleep 4 && \
     wineboot && \

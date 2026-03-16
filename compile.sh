@@ -24,7 +24,6 @@ if [ $READY -eq 0 ]; then
 fi
 
 # ── 2. Start Wine server ──────────────────────────────────────────────────────
-# Prefix is already pre-baked in the Docker image — just wake the wineserver
 echo "[2/6] Starting Wine server..."
 wineboot 2>/dev/null || true
 wineserver --wait 2>/dev/null || true
@@ -45,11 +44,10 @@ mkdir -p /compiler/MT5/MQL5/Files
 mkdir -p /compiler/MT5/logs
 mkdir -p /compiler/MT5/config
 
-# Ensure metaeditor.ini exists to disable auto-update
 if [ -f "/compiler/MT5/metaeditor.ini" ]; then
     echo "      metaeditor.ini found — auto-update disabled."
 else
-    echo "      Creating metaeditor.ini to disable auto-update..."
+    echo "      Creating metaeditor.ini..."
     cat > /compiler/MT5/metaeditor.ini << 'EOF'
 [Common]
 NewsEnable=0
@@ -74,35 +72,38 @@ fi
 
 cp "$SCRIPT_SRC" /compiler/MT5/MQL5/Scripts/test_script.mq5
 echo "      Script staged at: /compiler/MT5/MQL5/Scripts/test_script.mq5"
+
 # ── 5. Run MetaEditor ─────────────────────────────────────────────────────────
 echo "[5/6] Running MetaEditor64..."
 LOG_PATH="/compiler/MT5/build.log"
 rm -f "$LOG_PATH"
 
-echo "      === FULL DEBUG MODE ==="
-
-echo "      Exact filename in container:"
-ls -lh /compiler/MT5/*.exe
-
-echo "      File type check:"
+echo "      === BINARY VERIFICATION ==="
+echo "      File type:"
 file /compiler/MT5/metaeditor64.exe
 
-echo "      First 4 bytes (should be MZ for valid Windows exe):"
-xxd /compiler/MT5/metaeditor64.exe | head -2
+echo "      First 8 bytes (MZ = valid Windows exe, else = LFS pointer or corrupt):"
+xxd /compiler/MT5/metaeditor64.exe | head -1
 
-echo "      Running MetaEditor with full Wine debug..."
+echo "      File size:"
+du -sh /compiler/MT5/metaeditor64.exe
+
+echo "      === RUNNING METAEDITOR ==="
 WINEDEBUG=err+all timeout 60 wine /compiler/MT5/metaeditor64.exe \
     /compile:"C:\MT5\MQL5\Scripts\test_script.mq5" \
     /log:"C:\MT5\build.log" \
     /portable
 EXIT_CODE=$?
-echo "      MetaEditor exit code: $EXIT_CODE"
+echo "      Exit code: $EXIT_CODE"
 
-echo "      Searching entire container for any log files:"
-find /compiler /root/.wine -name "*.log" 2>/dev/null || echo "      None found"
+echo "      Files created by MetaEditor:"
+find /compiler/MT5 -newer /compiler/MT5/metaeditor.ini 2>/dev/null \
+    || echo "      No new files created"
 
-echo "      Searching for any file MetaEditor may have written:"
-find /compiler/MT5 -newer /compiler/MT5/metaeditor.ini 2>/dev/null || echo "      No new files created"
+echo "      Searching for any .log files:"
+find /compiler /root/.wine -name "*.log" 2>/dev/null \
+    || echo "      None found"
+
 # ── 6. Parse and report ───────────────────────────────────────────────────────
 echo "[6/6] Parsing build log..."
 
@@ -136,3 +137,15 @@ else
     echo "❌  RESULT: COMPILATION FAILED — see log above"
     exit 1
 fi
+```
+
+# ---
+
+# The `xxd` first line output will tell us everything. It should look like:
+# ```
+# 00000000: 4d5a 9000 0300 0000 ...    MZ......
+# ```
+
+# If instead it looks like:
+# ```
+# 00000000: 7665 7273 696f 6e20 ...    version
