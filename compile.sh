@@ -76,40 +76,31 @@ echo "      Script staged at: /compiler/MT5/MQL5/Scripts/test_script.mq5"
 
 # ── 5. Run MetaEditor ─────────────────────────────────────────────────────────
 echo "[5/6] Running MetaEditor64..."
-LOG_PATH="/compiler/MT5/build.log"
+
+# MetaEditor writes build log here when using AppData structure
+LOG_PATH="/compiler/MT5/MQL5/Logs/build.log"
+mkdir -p /compiler/MT5/MQL5/Logs
 rm -f "$LOG_PATH"
 
-# Write Wine debug output to a file instead of stdout
-# This prevents SIGPIPE (exit 141) from killing the script
 WINE_DEBUG_LOG="/compiler/MT5/wine_debug.log"
 
-echo "      Running MetaEditor — Wine debug going to $WINE_DEBUG_LOG"
-WINEDEBUG=err+all timeout 120 wine /compiler/MT5/metaeditor64.exe \
+timeout 120 wine /compiler/MT5/metaeditor64.exe \
     /compile:"C:\MT5\MQL5\Scripts\test_script.mq5" \
-    /log:"C:\MT5\build.log" \
+    /log:"C:\MT5\MQL5\Logs\build.log" \
     /portable \
     > "$WINE_DEBUG_LOG" 2>&1 || true
 
 EXIT_CODE=$?
 echo "      MetaEditor exit code: $EXIT_CODE"
 
-# Print last 50 lines of Wine debug log so we can see what happened
-echo "      === WINE DEBUG OUTPUT (last 50 lines) ==="
-tail -50 "$WINE_DEBUG_LOG" 2>/dev/null || echo "      (no debug output)"
+tail -30 "$WINE_DEBUG_LOG" 2>/dev/null || true
 
-echo "      === FILES CREATED BY METAEDITOR ==="
-find /compiler/MT5 -newer /compiler/MT5/metaeditor.ini 2>/dev/null \
-    || echo "      No new files created"
+echo "      Searching for any log files created:"
+find /compiler/MT5 -name "*.log" 2>/dev/null || echo "      None found"
 
-echo "      === SEARCHING FOR ANY .log FILES ==="
-find /compiler /root/.wine -name "*.log" 2>/dev/null \
-    || echo "      None found"
-
-# Poll for build log
-echo "      Waiting for build log..."
 for i in $(seq 1 20); do
     if [ -f "$LOG_PATH" ]; then
-        echo "      Build log appeared after ${i}s"
+        echo "      Log appeared after ${i}s"
         break
     fi
     sleep 1
