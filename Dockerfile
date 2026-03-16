@@ -24,6 +24,8 @@ ENV WINEDEBUG=-all \
     WINEARCH=win64 \
     DISPLAY=:99
 
+# Pre-bake Wine prefix at build time — network available here
+# so winetricks can download corefonts and vcrun2019
 RUN Xvfb :99 -screen 0 1024x768x24 -ac +extension GLX +render -noreset & \
     sleep 4 && \
     wineboot && \
