@@ -6,7 +6,7 @@ on:
 
 jobs:
   compile:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest    # ← native Windows, no Wine needed
 
     steps:
       - name: Checkout Code
@@ -14,64 +14,88 @@ jobs:
         with:
           lfs: true
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Cache Docker layers
-        uses: actions/cache@v4
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ hashFiles('Dockerfile') }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
-
-      - name: Verify MT5 files before build
+      - name: Verify MetaEditor exists
         run: |
-          echo "=== MT5 root files ==="
-          ls -lh MT5/
-          echo "=== MQL5 Include check ==="
-          ls MT5/MQL5/Include/ | head -10 || echo "Include folder missing or empty"
-          echo "=== Total file count in MT5 ==="
-          find MT5/ -type f | wc -l
+          dir MT5\
+          if (!(Test-Path "MT5\metaeditor64.exe")) {
+            Write-Error "metaeditor64.exe not found"
+            exit 1
+          }
+          Write-Host "MetaEditor found: $(Get-Item MT5\metaeditor64.exe | Select-Object -ExpandProperty Length) bytes"
 
-      - name: Build Compiler Image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: false
-          load: true
-          tags: mql-compiler:latest
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
-
-      - name: Rotate cache
+      - name: Create required MQL5 folders
         run: |
-          rm -rf /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+          New-Item -ItemType Directory -Force -Path "MT5\MQL5\Scripts"
+          New-Item -ItemType Directory -Force -Path "MT5\MQL5\Experts"
+          New-Item -ItemType Directory -Force -Path "MT5\MQL5\Indicators"
+          New-Item -ItemType Directory -Force -Path "MT5\MQL5\Libraries"
+          New-Item -ItemType Directory -Force -Path "MT5\MQL5\Logs"
+          New-Item -ItemType Directory -Force -Path "MT5\logs"
+          New-Item -ItemType Directory -Force -Path "MT5\config"
 
-      - name: Create output directory
-        run: mkdir -p /tmp/compiler-output
-
-      - name: Run MQL5 Compilation
+      - name: Stage script for compilation
         run: |
-          docker run --rm --network none \
-            -v /tmp/compiler-output:/output \
-            mql-compiler || true
+          Copy-Item "scripts\test_script.mq5" "MT5\MQL5\Scripts\test_script.mq5" -Force
+          Write-Host "Script staged successfully"
 
-      - name: Show output directory contents
-        if: always()
+      - name: Run MetaEditor compilation
         run: |
-          echo "=== Files in output dir ==="
-          ls -la /tmp/compiler-output/ || echo "Empty"
-          echo "=== wine_debug.log ==="
-          cat /tmp/compiler-output/wine_debug.log 2>/dev/null || echo "Not found"
-          echo "=== build.log ==="
-          cat /tmp/compiler-output/build.log 2>/dev/null || echo "Not found"
+          $metaeditor = "${{ github.workspace }}\MT5\metaeditor64.exe"
+          $script     = "${{ github.workspace }}\MT5\MQL5\Scripts\test_script.mq5"
+          $log        = "${{ github.workspace }}\MT5\MQL5\Logs\build.log"
 
-      - name: Upload Build Logs
+          Write-Host "Compiling: $script"
+          Write-Host "Log output: $log"
+
+          $process = Start-Process -FilePath $metaeditor `
+            -ArgumentList "/compile:`"$script`"", "/log:`"$log`"", "/portable" `
+            -Wait -PassThru -NoNewWindow
+
+          Write-Host "MetaEditor exit code: $($process.ExitCode)"
+
+          # Give it a moment to flush the log
+          Start-Sleep -Seconds 5
+
+      - name: Parse and display build log
+        run: |
+          $logPath = "${{ github.workspace }}\MT5\MQL5\Logs\build.log"
+
+          # Also check next to the script as fallback
+          $altLog  = "${{ github.workspace }}\MT5\MQL5\Scripts\test_script.log"
+
+          if (Test-Path $logPath) {
+            Write-Host "Log found at: $logPath"
+          } elseif (Test-Path $altLog) {
+            Write-Host "Log found at: $altLog"
+            $logPath = $altLog
+          } else {
+            Write-Host "Searching for any log files..."
+            Get-ChildItem -Path "MT5\" -Recurse -Filter "*.log" | Select-Object FullName
+            Write-Error "No build log found — MetaEditor did not compile"
+            exit 1
+          }
+
+          # MetaEditor writes UTF-16LE — decode it
+          $bytes   = [System.IO.File]::ReadAllBytes($logPath)
+          $content = [System.Text.Encoding]::Unicode.GetString($bytes)
+
+          Write-Host ""
+          Write-Host "━━━━━━━━━━━━━━━━━━━━ COMPILATION LOG ━━━━━━━━━━━━━━━━━━━━"
+          Write-Host $content
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+          if ($content -match "0 error") {
+            Write-Host "✅ RESULT: COMPILATION SUCCEEDED"
+            exit 0
+          } else {
+            Write-Host "❌ RESULT: COMPILATION FAILED"
+            exit 1
+          }
+
+      - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build-logs
-          path: /tmp/compiler-output/
+          name: build-log
+          path: MT5\MQL5\Logs\build.log
           if-no-files-found: ignore
