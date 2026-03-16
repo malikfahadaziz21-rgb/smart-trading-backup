@@ -77,14 +77,15 @@ echo "      Script staged at: /compiler/MT5/MQL5/Scripts/test_script.mq5"
 # ── 5. Run MetaEditor ─────────────────────────────────────────────────────────
 echo "[5/6] Running MetaEditor64..."
 
-# MetaEditor writes build log here when using AppData structure
-LOG_PATH="/compiler/MT5/MQL5/Logs/build.log"
 mkdir -p /compiler/MT5/MQL5/Logs
+LOG_PATH="/compiler/MT5/MQL5/Logs/build.log"
 rm -f "$LOG_PATH"
 
 WINE_DEBUG_LOG="/compiler/MT5/wine_debug.log"
+rm -f "$WINE_DEBUG_LOG"
 
-timeout 120 wine /compiler/MT5/metaeditor64.exe \
+echo "      Running MetaEditor..."
+WINEDEBUG=err+all timeout 120 wine /compiler/MT5/metaeditor64.exe \
     /compile:"C:\MT5\MQL5\Scripts\test_script.mq5" \
     /log:"C:\MT5\MQL5\Logs\build.log" \
     /portable \
@@ -93,20 +94,26 @@ timeout 120 wine /compiler/MT5/metaeditor64.exe \
 EXIT_CODE=$?
 echo "      MetaEditor exit code: $EXIT_CODE"
 
-tail -30 "$WINE_DEBUG_LOG" 2>/dev/null || true
+# Print wine debug log directly to stdout so we can see it in Actions
+echo "      === FULL WINE DEBUG LOG ==="
+cat "$WINE_DEBUG_LOG" 2>/dev/null || echo "      (wine_debug.log is empty)"
 
-echo "      Searching for any log files created:"
-find /compiler/MT5 -name "*.log" 2>/dev/null || echo "      None found"
+echo "      === ALL FILES IN MT5 AFTER RUN ==="
+find /compiler/MT5 -type f 2>/dev/null
 
+# Copy logs to mounted output volume
+cp "$WINE_DEBUG_LOG" /output/wine_debug.log 2>/dev/null || true
+cp "$LOG_PATH" /output/build.log 2>/dev/null || true
+
+echo "      Waiting for build log..."
 for i in $(seq 1 20); do
     if [ -f "$LOG_PATH" ]; then
-        echo "      Log appeared after ${i}s"
+        echo "      Build log appeared after ${i}s"
         break
     fi
     sleep 1
 done
 sleep 3
-
 # ── 6. Parse and report ───────────────────────────────────────────────────────
 echo "[6/6] Parsing build log..."
 
@@ -114,7 +121,8 @@ if [ ! -f "$LOG_PATH" ]; then
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "  ERROR: build.log was never created by MetaEditor."
-    echo "  Check Wine debug output above for clues."
+    echo "  MetaEditor ran (exit 0) but produced no output."
+    echo "  See WINE DEBUG LOG above for exact reason."
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     kill $XVFB_PID 2>/dev/null || true
     exit 1
