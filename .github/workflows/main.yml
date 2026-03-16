@@ -50,7 +50,7 @@ jobs:
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache
 
       - name: Run MQL5 Compilation
-        run: docker run --rm mql-compiler
+        run: docker run --rm --network none mql-compiler
 
       - name: Upload Build Log
         if: always()

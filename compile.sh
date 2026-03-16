@@ -31,7 +31,6 @@ if [ ! -f "$WINEPREFIX/system.reg" ]; then
     wineboot
     wineserver --wait
 
-    # Disable crash dialogs and popups that block headless execution
     wine reg add "HKCU\\Software\\Wine\\WineDbg" /v ShowCrashDialog /t REG_DWORD /d 0 /f 2>/dev/null || true
     wine reg add "HKCU\\Software\\Wine" /v Version /t REG_SZ /d "win10" /f 2>/dev/null || true
     wineserver --wait
@@ -48,8 +47,40 @@ fi
 
 # ── 3. Wine version confirmation ─────────────────────────────────────────────
 echo "[3/6] Wine version: $(wine --version)"
-# ── 4. Verify source file and stage into MetaEditor's Scripts folder ──────────
-echo "[4/6] Setting up source file..."
+
+# ── 4. Setup folder structure + stage script ─────────────────────────────────
+echo "[4/6] Setting up folder structure and source file..."
+
+mkdir -p /compiler/MT5/MQL5/Scripts
+mkdir -p /compiler/MT5/MQL5/Experts
+mkdir -p /compiler/MT5/MQL5/Indicators
+mkdir -p /compiler/MT5/MQL5/Libraries
+mkdir -p /compiler/MT5/MQL5/Include
+mkdir -p /compiler/MT5/MQL5/Files
+mkdir -p /compiler/MT5/logs
+mkdir -p /compiler/MT5/config
+
+# Copy ini file to disable auto-update and news — prevents first-launch hang
+# MetaEditor looks for this file in the same directory as the exe
+if [ -f "/compiler/MT5/metaeditor.ini" ]; then
+    echo "      metaeditor.ini found — auto-update will be disabled."
+else
+    echo "      WARNING: metaeditor.ini not found — creating default one..."
+    cat > /compiler/MT5/metaeditor.ini << 'EOF'
+[Common]
+NewsEnable=0
+AutoUpdate=0
+CommunityLogin=
+CommunityPassword=
+[StartUp]
+AutoUpdate=0
+EOF
+fi
+
+echo "      MQL5 folder structure verified."
+echo "      MT5 directory contents:"
+ls -lh /compiler/MT5/
+
 SCRIPT_SRC="/compiler/scripts/test_script.mq5"
 
 if [ ! -f "$SCRIPT_SRC" ]; then
@@ -59,21 +90,31 @@ if [ ! -f "$SCRIPT_SRC" ]; then
     exit 1
 fi
 
-# Copy into MetaEditor's own Scripts folder — this is where it natively compiles from
-# /compiler/MT5 is mapped as C:\MT5 via the /portable flag
 cp "$SCRIPT_SRC" /compiler/MT5/MQL5/Scripts/test_script.mq5
 echo "      Script staged at: /compiler/MT5/MQL5/Scripts/test_script.mq5"
+
 # ── 5. Run MetaEditor ─────────────────────────────────────────────────────────
 echo "[5/6] Running MetaEditor64..."
 LOG_PATH="/compiler/MT5/build.log"
 rm -f "$LOG_PATH"
 
-# /portable makes MetaEditor treat its own exe directory as the MT5 data folder
-# so C:\MT5 = /compiler/MT5 inside the container
-timeout 120 wine /compiler/MT5/MetaEditor64.exe \
+# 180s timeout — extra headroom for Wine startup overhead
+# No 2>/dev/null so we see all Wine output for debugging
+timeout 180 wine /compiler/MT5/MetaEditor64.exe \
     /compile:"C:\MT5\MQL5\Scripts\test_script.mq5" \
     /log:"C:\MT5\build.log" \
-    /portable
+    /portable || true
+
+echo "      MetaEditor exited, checking for log..."
+
+for i in $(seq 1 20); do
+    if [ -f "$LOG_PATH" ]; then
+        echo "      Log appeared after ${i}s"
+        break
+    fi
+    sleep 1
+done
+sleep 3
 
 # ── 6. Parse and report ───────────────────────────────────────────────────────
 echo "[6/6] Parsing build log..."
@@ -83,12 +124,8 @@ if [ ! -f "$LOG_PATH" ]; then
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "  ERROR: build.log was never created by MetaEditor."
     echo ""
-    echo "  Possible causes:"
-    echo "    1. MetaEditor is hanging on auto-update check"
-    echo "    2. MetaEditor can't find metaeditor64.exe dependencies"
-    echo "    3. /portable flag not suppressing first-launch dialog"
-    echo ""
-    echo "  Check the Wine stderr output above this message for clues."
+    echo "  MetaEditor timed out or crashed before compiling."
+    echo "  Check Wine output above for clues."
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     kill $XVFB_PID 2>/dev/null || true
     exit 1
