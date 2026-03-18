@@ -24,8 +24,7 @@ ENV WINEDEBUG=-all \
     WINEARCH=win64 \
     DISPLAY=:99
 
-# Pre-bake Wine prefix at build time — network available here
-# so winetricks can download corefonts and vcrun2019
+# Pre-bake Wine prefix at build time
 RUN Xvfb :99 -screen 0 1024x768x24 -ac +extension GLX +render -noreset & \
     sleep 4 && \
     wineboot && \
@@ -40,9 +39,16 @@ RUN Xvfb :99 -screen 0 1024x768x24 -ac +extension GLX +render -noreset & \
 RUN wine --version
 
 WORKDIR /compiler
-COPY ./MT5      /compiler/MT5
-COPY ./scripts  /compiler/scripts
-COPY compile.sh /compiler/compile.sh
+
+# Only copy small files into the image
+# Large exe files (metaeditor64.exe, terminal64.exe) are mounted at runtime
+# This keeps the Docker image small and avoids disk space issues
+COPY ./MT5/MQL5        /compiler/MT5/MQL5
+COPY ./MT5/config      /compiler/MT5/config
+COPY ./MT5/metaeditor.ini  /compiler/MT5/metaeditor.ini
+COPY ./MT5/origin.txt  /compiler/MT5/origin.txt
+COPY ./scripts         /compiler/scripts
+COPY compile.sh        /compiler/compile.sh
 RUN chmod +x /compiler/compile.sh
 
 ENTRYPOINT ["/bin/bash", "/compiler/compile.sh"]
