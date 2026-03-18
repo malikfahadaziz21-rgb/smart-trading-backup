@@ -1,0 +1,15 @@
+//+------------------------------------------------------------------+
+//|                                                   Strategy 1     |
+//|                                      Copyright 2026, SmartTrade  |
+//+------------------------------------------------------------------+
+#property copyright "SmartTrade"
+#property link      ""
+#property version   "1.00"
+
+int OnInit() { return(INIT_SUCCEEDED); }
+void OnDeinit(const int reason) { }
+void OnTick() { 
+   // Basic Moving Average mock logic
+}
+//+------------------------------------------------------------------+
+#property script_name "strategy_b02c9ca8.mq5"
