@@ -29,7 +29,7 @@ wineboot 2>/dev/null || true
 wineserver --wait 2>/dev/null || true
 echo "      Wine server ready."
 
-# ── 3. Wine version confirmation ─────────────────────────────────────────────
+# ── 3. Wine version ───────────────────────────────────────────────────────────
 echo "[3/7] Wine version: $(wine --version)"
 
 # ── 4. Setup folder structure ─────────────────────────────────────────────────
@@ -50,12 +50,10 @@ mkdir -p /compiler/MT5/Bases
 mkdir -p /compiler/MT5/temp
 mkdir -p /compiler/MT5/Tester
 
-# Ensure terminal.ini exists to suppress broker login and auto-update
-if [ -f "/compiler/MT5/config/terminal.ini" ]; then
-    echo "      terminal.ini found."
-else
-    echo "      Creating terminal.ini..."
-    cat > /compiler/MT5/config/terminal.ini << 'EOF'
+# Write terminal.ini in BOTH locations terminal might look
+# 1. config subfolder (standard MT5 data dir location)
+# 2. directly next to exe (some /portable builds look here)
+cat > /compiler/MT5/config/terminal.ini << 'INIEOF'
 [Common]
 Login=0
 Server=
@@ -66,15 +64,13 @@ CommunityPassword=
 [StartUp]
 AutoUpdate=0
 ExpertEnable=0
-EOF
-fi
+INIEOF
 
-# Ensure metaeditor.ini exists
-if [ -f "/compiler/MT5/metaeditor.ini" ]; then
-    echo "      metaeditor.ini found."
-else
-    echo "      Creating metaeditor.ini..."
-    cat > /compiler/MT5/metaeditor.ini << 'EOF'
+cp /compiler/MT5/config/terminal.ini /compiler/MT5/terminal.ini
+echo "      terminal.ini written to both locations."
+
+# Write metaeditor.ini
+cat > /compiler/MT5/metaeditor.ini << 'INIEOF'
 [Common]
 NewsEnable=0
 AutoUpdate=0
@@ -82,10 +78,10 @@ CommunityLogin=
 CommunityPassword=
 [StartUp]
 AutoUpdate=0
-EOF
-fi
+INIEOF
+echo "      metaeditor.ini written."
 
-echo "      MT5 directory contents:"
+echo "      MT5 directory:"
 ls -lh /compiler/MT5/
 
 # ── 5. Stage script ───────────────────────────────────────────────────────────
@@ -100,55 +96,56 @@ if [ ! -f "$SCRIPT_SRC" ]; then
 fi
 
 cp "$SCRIPT_SRC" /compiler/MT5/MQL5/Scripts/test_script.mq5
-echo "      Script staged at: /compiler/MT5/MQL5/Scripts/test_script.mq5"
+echo "      Script staged."
 
-# ── 6. Start terminal64 and wait for it to be ready ──────────────────────────
+# ── 6. Start terminal64 and wait until ready ──────────────────────────────────
 echo "[6/7] Starting terminal64.exe..."
 
 TERMINAL_LOG="/compiler/MT5/logs/terminal.log"
 rm -f "$TERMINAL_LOG"
 
-# Start terminal in background — /portable means use exe dir as data root
 wine /compiler/MT5/terminal64.exe /portable > /compiler/MT5/terminal_wine.log 2>&1 &
 TERMINAL_PID=$!
+echo "      terminal64 started with PID: $TERMINAL_PID"
 
-echo "      Waiting for terminal64 to initialize..."
-TERMINAL_READY=0
+# Wait for terminal.log to appear — this means terminal has started loading
+echo "      Waiting for terminal.log to appear (up to 60s)..."
 for i in $(seq 1 60); do
-    # Terminal writes terminal.log when it starts up
     if [ -f "$TERMINAL_LOG" ]; then
-        echo "      Terminal log appeared after ${i}s — terminal is initializing"
-        TERMINAL_READY=1
+        echo "      terminal.log appeared after ${i}s"
         break
     fi
-    # Also check if terminal process died early
     if ! kill -0 $TERMINAL_PID 2>/dev/null; then
-        echo "      WARNING: terminal64 process died after ${i}s"
+        echo "      ERROR: terminal64 died after ${i}s"
         echo "      Terminal Wine log:"
         cat /compiler/MT5/terminal_wine.log 2>/dev/null || true
-        break
+        kill $XVFB_PID 2>/dev/null || true
+        exit 1
     fi
     sleep 1
 done
 
-# Give terminal extra time to fully initialize after log appears
-echo "      Giving terminal extra 15s to fully initialize..."
-sleep 15
+# Show terminal log content so we know what state it is in
+echo "      terminal.log content:"
+cat "$TERMINAL_LOG" 2>/dev/null || echo "      (empty)"
 
-echo "      Terminal status:"
+# Give terminal extra time to fully load MQL5 engine
+# 30 seconds is safer than 15 — terminal needs to load all modules
+echo "      Waiting 30s for terminal MQL5 engine to fully load..."
+sleep 30
+
+# Confirm terminal is still running
 if kill -0 $TERMINAL_PID 2>/dev/null; then
-    echo "      terminal64 is running (PID: $TERMINAL_PID)"
+    echo "      terminal64 still running after wait — good."
 else
-    echo "      WARNING: terminal64 is not running"
+    echo "      WARNING: terminal64 exited during wait."
     echo "      Terminal Wine log tail:"
-    tail -20 /compiler/MT5/terminal_wine.log 2>/dev/null || true
+    tail -30 /compiler/MT5/terminal_wine.log 2>/dev/null || true
 fi
 
-# Show terminal log if it exists
-if [ -f "$TERMINAL_LOG" ]; then
-    echo "      Terminal log contents:"
-    cat "$TERMINAL_LOG" 2>/dev/null || true
-fi
+# Show updated terminal log
+echo "      terminal.log after wait:"
+cat "$TERMINAL_LOG" 2>/dev/null || echo "      (empty)"
 
 # ── 7. Run MetaEditor ─────────────────────────────────────────────────────────
 echo "[7/7] Running MetaEditor64..."
@@ -158,7 +155,6 @@ rm -f "$LOG_PATH"
 
 touch /tmp/before_compile
 
-# Run MetaEditor — terminal64 is running so it can accept compile jobs
 timeout 120 wine /compiler/MT5/metaeditor64.exe \
     /compile:"Z:\compiler\MT5\MQL5\Scripts\test_script.mq5" \
     /log:"Z:\compiler\MT5\MQL5\Logs\build.log" \
@@ -167,18 +163,16 @@ timeout 120 wine /compiler/MT5/metaeditor64.exe \
 EXIT_CODE=$?
 echo "      MetaEditor exit code: $EXIT_CODE"
 
-# Show MetaEditor Wine log
 echo "      MetaEditor Wine log:"
 cat /compiler/MT5/metaeditor_wine.log 2>/dev/null || echo "      (empty)"
 
-# Find any new files created during compilation
-echo "      New files created during compilation:"
+echo "      New files after MetaEditor ran:"
 find /compiler/MT5 -newer /tmp/before_compile -type f 2>/dev/null \
     | grep -v "metaeditor_wine.log" \
     || echo "      None found"
 
 # Poll for build log
-echo "      Waiting for build log..."
+echo "      Polling for build log (up to 20s)..."
 for i in $(seq 1 20); do
     if [ -f "$LOG_PATH" ]; then
         echo "      Build log appeared after ${i}s"
@@ -188,14 +182,15 @@ for i in $(seq 1 20); do
 done
 sleep 3
 
-# Kill terminal now that compilation is done
+# Shutdown
 echo "      Shutting down terminal64..."
 kill $TERMINAL_PID 2>/dev/null || true
 wineserver -k 2>/dev/null || true
 
-# Copy logs to output volume for artifact upload
+# Copy all logs to output volume
 cp /compiler/MT5/metaeditor_wine.log /output/metaeditor_wine.log 2>/dev/null || true
 cp /compiler/MT5/terminal_wine.log /output/terminal_wine.log 2>/dev/null || true
+cp "$TERMINAL_LOG" /output/terminal.log 2>/dev/null || true
 cp "$LOG_PATH" /output/build.log 2>/dev/null || true
 
 # ── Parse and report ──────────────────────────────────────────────────────────
@@ -203,4 +198,30 @@ echo "[Done] Parsing build log..."
 
 if [ ! -f "$LOG_PATH" ]; then
     echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  ERROR: build.log was never created by MetaEditor."
+    echo "  Check metaeditor_wine.log and terminal_wine.log above."
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    kill $XVFB_PID 2>/dev/null || true
+    exit 1
+fi
+
+DECODED_LOG=$(iconv -f UTF-16LE -t UTF-8 "$LOG_PATH" 2>/dev/null \
+    || iconv -f UTF-16 -t UTF-8 "$LOG_PATH" 2>/dev/null \
+    || cat "$LOG_PATH")
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━ COMPILATION LOG ━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "$DECODED_LOG"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+kill $XVFB_PID 2>/dev/null || true
+
+if echo "$DECODED_LOG" | grep -qi "0 error"; then
+    echo "SUCCESS: COMPILATION SUCCEEDED"
+    exit 0
+else
+    echo "FAILED: COMPILATION FAILED - see log above"
+    exit 1
+fi
