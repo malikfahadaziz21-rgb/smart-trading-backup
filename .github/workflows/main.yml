@@ -66,7 +66,18 @@ jobs:
 
       - name: Run MQL5 Compilation
         run: |
+          # Check exe files exist and have correct permissions before mounting
+          echo "=== Checking exe files on runner ==="
+          ls -lh ${{ github.workspace }}/MT5/metaeditor64.exe
+          ls -lh ${{ github.workspace }}/MT5/terminal64.exe
+
+          # Set execute permissions on both exes before mounting
+          chmod +x ${{ github.workspace }}/MT5/metaeditor64.exe
+          chmod +x ${{ github.workspace }}/MT5/terminal64.exe
+
           docker run --rm --network none \
+            -v ${{ github.workspace }}/MT5/metaeditor64.exe:/compiler/MT5/metaeditor64.exe \
+            -v ${{ github.workspace }}/MT5/terminal64.exe:/compiler/MT5/terminal64.exe \
             -v /tmp/compiler-output:/output \
             mql-compiler || true
 
