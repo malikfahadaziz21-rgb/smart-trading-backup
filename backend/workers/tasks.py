@@ -38,9 +38,9 @@ def process_strategy_pipeline(job_id: str, prompt: str):
         update_job(job_id, script_content=script_content, script_name=script_name)
 
         # ── Step 2: Push script to GitHub ────────────────────────────
-        pushed = github.push_script(script_name, script_content)
+        pushed, push_error = github.push_script(script_name, script_content)
         if not pushed:
-            raise Exception("Failed to push script to GitHub")
+            raise Exception(f"Failed to push script to GitHub: {push_error}")
 
         # ── Step 3: Trigger GitHub Actions compilation ────────────────
         update_job(job_id, status=JobStatus.COMPILING)

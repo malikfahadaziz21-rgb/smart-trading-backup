@@ -14,7 +14,7 @@ class GitHubService:
         }
         self.base_url = f"https://api.github.com/repos/{self.owner}/{self.repo}"
 
-    def push_script(self, script_name: str, script_content: str) -> bool:
+    def push_script(self, script_name: str, script_content: str) -> tuple[bool, str]:
         url = f"{self.base_url}/contents/scripts/{script_name}"
         
         # Check if file exists (need SHA to update)
@@ -29,7 +29,10 @@ class GitHubService:
             data["sha"] = sha
         
         response = requests.put(url, json=data, headers=self.headers)
-        return response.status_code in [200, 201]
+        if response.status_code in [200, 201]:
+            return True, "Success"
+        else:
+            return False, f"HTTP {response.status_code}: {response.text}"
 
     def trigger_workflow(self, script_name: str) -> bool:
         url = f"{self.base_url}/actions/workflows/{settings.GITHUB_WORKFLOW_FILE}/dispatches"
