@@ -1,0 +1,85 @@
+name: MQL5 Compile
+
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      script_name:
+        description: 'MQL5 script filename to compile'
+        required: true
+        default: 'test_script.mq5'
+
+jobs:
+  compile:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Create required folders
+        run: |
+          New-Item -ItemType Directory -Force -Path "MT5\MQL5\Scripts"
+          New-Item -ItemType Directory -Force -Path "MT5\MQL5\Logs"
+          New-Item -ItemType Directory -Force -Path "MT5\MQL5\Experts"
+          New-Item -ItemType Directory -Force -Path "MT5\MQL5\Indicators"
+          New-Item -ItemType Directory -Force -Path "MT5\MQL5\Libraries"
+          New-Item -ItemType Directory -Force -Path "MT5\logs"
+          New-Item -ItemType Directory -Force -Path "MT5\config"
+
+      - name: Stage script for compilation
+        run: |
+          $scriptName = "${{ github.event.inputs.script_name }}"
+          if (-not $scriptName) { $scriptName = "test_script.mq5" }
+          Write-Host "Compiling script: $scriptName"
+          Copy-Item "scripts\$scriptName" "MT5\MQL5\Scripts\$scriptName" -Force
+
+      - name: Run MetaEditor compilation
+        run: |
+          $scriptName = "${{ github.event.inputs.script_name }}"
+          if (-not $scriptName) { $scriptName = "test_script.mq5" }
+
+          $metaeditor = "${{ github.workspace }}\MT5\metaeditor64.exe"
+          $script     = "${{ github.workspace }}\MT5\MQL5\Scripts\$scriptName"
+          $log        = "${{ github.workspace }}\MT5\MQL5\Logs\build.log"
+
+          $process = Start-Process -FilePath $metaeditor `
+            -ArgumentList "/compile:`"$script`"", "/log:`"$log`"", "/portable" `
+            -Wait -PassThru -NoNewWindow
+
+          Write-Host "MetaEditor exit code: $($process.ExitCode)"
+          Start-Sleep -Seconds 5
+
+      - name: Parse and display result
+        run: |
+          $logPath = "${{ github.workspace }}\MT5\MQL5\Logs\build.log"
+
+          if (-not (Test-Path $logPath)) {
+            Write-Error "No build log — compilation failed silently"
+            exit 1
+          }
+
+          $bytes   = [System.IO.File]::ReadAllBytes($logPath)
+          $content = [System.Text.Encoding]::Unicode.GetString($bytes)
+
+          Write-Host "━━━━━━━━━━━━━━━━ COMPILATION LOG ━━━━━━━━━━━━━━━━"
+          Write-Host $content
+          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+          if ($content -match "0 error") {
+            Write-Host "SUCCESS"
+            exit 0
+          } else {
+            Write-Host "FAILED"
+            exit 1
+          }
+
+      - name: Upload build log artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: MT5\MQL5\Logs\build.log
+          if-no-files-found: ignore
