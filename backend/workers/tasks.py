@@ -6,8 +6,19 @@ from backend.db.models import JobStatus, Job
 from backend.db.database import get_db, SessionLocal
 from backend.config import settings
 import asyncio
+import ssl
 
-celery_app = Celery("tasks", broker=settings.REDIS_URL, backend=settings.REDIS_URL)
+# Upstash Redis requires SSL — convert redis:// to rediss://
+redis_url = settings.REDIS_URL
+if redis_url.startswith("redis://") and "upstash.io" in redis_url:
+    redis_url = redis_url.replace("redis://", "rediss://", 1)
+
+celery_app = Celery("tasks", broker=redis_url, backend=redis_url)
+
+# SSL config required for Upstash
+celery_app.conf.broker_use_ssl = {"ssl_cert_reqs": ssl.CERT_NONE}
+celery_app.conf.redis_backend_use_ssl = {"ssl_cert_reqs": ssl.CERT_NONE}
+
 github = GitHubService()
 
 def update_job(job_id: str, db=None, **kwargs):

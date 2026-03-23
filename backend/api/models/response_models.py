@@ -9,7 +9,17 @@ class StrategyDraftResponse(BaseModel):
 class StrategyResultResponse(BaseModel):
     job_id: str
     status: str
-    compile_success: Optional[str]
-    compile_log: Optional[str]
-    backtest_result: Optional[str]
-    script_content: Optional[str]
+    compile_success: Optional[str] = None
+    compile_log: Optional[str] = None
+    backtest_result: Optional[str] = None
+    script_content: Optional[str] = None
+    prompt: Optional[str] = None
+
+class AuthResponse(BaseModel):
+    token: str
+    username: str
+
+class UserProfileResponse(BaseModel):
+    id: str
+    username: str
+    email: str

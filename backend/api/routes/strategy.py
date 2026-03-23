@@ -1,14 +1,15 @@
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from backend.workers.tasks import process_strategy_pipeline
 from backend.api.models.request_models import StrategyRequest
 from backend.db.database import get_db
-from backend.db.models import Job
+from backend.db.models import Job, User
+from backend.services.auth_service import get_current_user, enforce_script_limit
 
 router = APIRouter(prefix="/api/v1", tags=["strategy"])
 
-async def create_job(prompt: str, db: Session) -> Job:
-    job = Job(user_prompt=prompt, script_name="")
+async def create_job(prompt: str, user_id, db: Session) -> Job:
+    job = Job(user_prompt=prompt, script_name="", user_id=user_id)
     db.add(job)
     db.commit()
     db.refresh(job)
@@ -17,16 +18,17 @@ async def create_job(prompt: str, db: Session) -> Job:
 @router.post("/generate")
 async def generate_and_compile(
     request: StrategyRequest,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    # Create job in DB
-    job = await create_job(request.prompt, db)
+    # Create job linked to user
+    job = await create_job(request.prompt, current_user.id, db)
     
-    # Queue the full pipeline as background task
-    # Note: Bypassing Celery for quick local testing and using BackgroundTasks.
-    from backend.workers.tasks import process_strategy_pipeline
-    background_tasks.add_task(process_strategy_pipeline, str(job.id), request.prompt)
+    # Enforce 5-script rolling limit (delete oldest if > 5)
+    enforce_script_limit(current_user.id, db)
+    
+    # Queue the full pipeline via Celery
+    process_strategy_pipeline.delay(str(job.id), request.prompt)
     
     return {
         "job_id": str(job.id),

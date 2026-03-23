@@ -79,11 +79,11 @@ async def generate_mql5_script(user_prompt: str, job_id: str) -> tuple[str, str]
     clean_prompt = user_prompt.strip()
     
     if clean_prompt == "1":
-        return MOCK_SCRIPT_1.strip() + f'\n#property script_name "{script_name}.mq5"\n', f"{script_name}.mq5"
+        return MOCK_SCRIPT_1.strip(), f"{script_name}.mq5"
     elif clean_prompt == "2":
-        return MOCK_SCRIPT_2.strip() + f'\n#property script_name "{script_name}.mq5"\n', f"{script_name}.mq5"
+        return MOCK_SCRIPT_2.strip(), f"{script_name}.mq5"
     elif clean_prompt == "3":
-        return MOCK_SCRIPT_3.strip() + f'\n#property script_name "{script_name}.mq5"\n', f"{script_name}.mq5"
+        return MOCK_SCRIPT_3.strip(), f"{script_name}.mq5"
     
     prompt = f"""
     {SYSTEM_PROMPT}
@@ -92,7 +92,6 @@ async def generate_mql5_script(user_prompt: str, job_id: str) -> tuple[str, str]
     {user_prompt}
     
     Script name should be: {script_name}
-    Use #property script_name "{script_name}.mq5"
     """
     
     response = model.generate_content(prompt)
