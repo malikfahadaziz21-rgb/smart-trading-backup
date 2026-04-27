@@ -14,6 +14,7 @@ class StrategyResultResponse(BaseModel):
     backtest_result: Optional[str] = None
     script_content: Optional[str] = None
     prompt: Optional[str] = None
+    error_message: Optional[str] = None
 
 class AuthResponse(BaseModel):
     token: str

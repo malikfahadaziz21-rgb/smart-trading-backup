@@ -1,17 +1,20 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
 
 :root {
-  --bg-gradient: linear-gradient(135deg, #09090b 0%, #1a1025 100%);
-  --glass-bg: rgba(255, 255, 255, 0.03);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --accent-glow: 0 0 20px rgba(138, 43, 226, 0.4);
-  --primary: #8a2be2;
-  --primary-hover: #9b4dff;
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
-  --success: #10b981;
-  --error: #ef4444;
-  --card-radius: 24px;
+  --bg-gradient: linear-gradient(135deg, #020d14 0%, #051a2e 60%, #0a1628 100%);
+  --glass-bg: rgba(0, 200, 180, 0.03);
+  --glass-border: rgba(0, 200, 180, 0.1);
+  --accent-glow: 0 0 24px rgba(0, 210, 180, 0.35);
+  --primary: #00c8a0;
+  --primary-hover: #00e6b8;
+  --amber: #f59e0b;
+  --amber-glow: 0 0 20px rgba(245, 158, 11, 0.35);
+  --text-main: #e8f4f2;
+  --text-muted: #7fa8a0;
+  --success: #00d4aa;
+  --error: #ff5f6d;
+  --warning: #f59e0b;
+  --card-radius: 20px;
 }
 
 * {
@@ -43,7 +46,7 @@ h1 {
   font-size: 2.5rem;
   font-weight: 800;
   text-align: center;
-  background: linear-gradient(to right, #cf8bf3, #fbc2eb);
+  background: linear-gradient(to right, #00c8a0, #f59e0b);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -58,13 +61,13 @@ h1 {
 
 .glass-card {
   background: var(--glass-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
   border: 1px solid var(--glass-border);
   border-radius: var(--card-radius);
   padding: 30px;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
-  animation: fadeIn 0.5s ease-out;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(0, 200, 180, 0.05);
+  animation: fadeIn 0.4s ease-out;
 }
 
 /* ── Auth styles ───────────────────────────────────────────────────── */
@@ -98,7 +101,7 @@ h1 {
 
 .toggle-btn.active {
   background: var(--primary);
-  color: white;
+  color: #020d14;
   box-shadow: var(--accent-glow);
 }
 
@@ -110,7 +113,7 @@ h1 {
 
 .auth-form input {
   width: 100%;
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.25);
   border: 1px solid var(--glass-border);
   border-radius: 12px;
   padding: 14px 15px;
@@ -123,7 +126,7 @@ h1 {
 .auth-form input:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 10px rgba(138, 43, 226, 0.2);
+  box-shadow: 0 0 12px rgba(0, 200, 160, 0.2);
 }
 
 .auth-error {
@@ -131,8 +134,9 @@ h1 {
   font-size: 0.85rem;
   text-align: center;
   padding: 8px;
-  background: rgba(239, 68, 68, 0.1);
+  background: rgba(255, 95, 109, 0.1);
   border-radius: 8px;
+  border: 1px solid rgba(255, 95, 109, 0.2);
 }
 
 .password-hint {
@@ -162,7 +166,7 @@ h1 {
 
 .logout-btn {
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(0, 200, 160, 0.2);
   color: var(--text-muted);
   padding: 8px 18px;
   border-radius: 10px;
@@ -192,7 +196,7 @@ h1 {
 
 textarea {
   width: 100%;
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.25);
   border: 1px solid var(--glass-border);
   border-radius: 12px;
   padding: 15px;
@@ -207,29 +211,30 @@ textarea {
 textarea:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 10px rgba(138, 43, 226, 0.2);
+  box-shadow: 0 0 12px rgba(0, 200, 160, 0.2);
 }
 
 button {
-  background: var(--primary);
-  color: white;
+  background: linear-gradient(135deg, #00c8a0, #00a882);
+  color: #020d14;
   border: none;
   border-radius: 12px;
   padding: 15px 24px;
   font-size: 1.1rem;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: var(--accent-glow);
 }
 
 button:hover:not(:disabled) {
-  background: var(--primary-hover);
+  background: linear-gradient(135deg, #00e6b8, #00c8a0);
   transform: translateY(-2px);
+  box-shadow: 0 0 30px rgba(0, 210, 180, 0.5);
 }
 
 button:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
   box-shadow: none;
 }
@@ -246,10 +251,15 @@ button:disabled {
   flex-direction: column;
   gap: 15px;
   padding: 20px;
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(0, 200, 160, 0.02);
   border: 1px solid var(--glass-border);
   border-radius: 16px;
   transition: all 0.3s ease;
+}
+
+.job-card:hover {
+  border-color: rgba(0, 200, 160, 0.2);
+  box-shadow: 0 0 20px rgba(0, 200, 160, 0.08);
 }
 
 .job-header {
@@ -265,67 +275,205 @@ button:disabled {
 }
 
 .status-badge {
-  padding: 6px 12px;
+  padding: 6px 14px;
   border-radius: 20px;
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-size: 0.8rem;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 1px;
 }
 
-.status-pending { background: rgba(245, 158, 11, 0.2); color: #fcd34d; }
-.status-generating { background: rgba(139, 92, 246, 0.2); color: #c4b5fd; }
-.status-compiling { background: rgba(59, 130, 246, 0.2); color: #93c5fd; }
-.status-backtesting { background: rgba(236, 72, 153, 0.2); color: #f9a8d4; }
-.status-completed { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; box-shadow: 0 0 10px rgba(16, 185, 129, 0.3); }
-.status-failed { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
+.status-pending    { background: rgba(245, 158, 11, 0.15); color: #fcd34d; border: 1px solid rgba(245,158,11,0.25); }
+.status-generating { background: rgba(0, 200, 160, 0.15);  color: #00e6b8; border: 1px solid rgba(0,200,160,0.25); }
+.status-compiling  { background: rgba(56, 189, 248, 0.15);  color: #7dd3fc; border: 1px solid rgba(56,189,248,0.25); }
+.status-backtesting{ background: rgba(245, 158, 11, 0.15);  color: #fbbf24; border: 1px solid rgba(245,158,11,0.25); }
+.status-completed  { background: rgba(0, 212, 170, 0.15);   color: #00d4aa; border: 1px solid rgba(0,212,170,0.3); box-shadow: 0 0 12px rgba(0,212,170,0.2); }
+.status-failed     { background: rgba(255, 95, 109, 0.15);  color: #ff8f9a; border: 1px solid rgba(255,95,109,0.25); }
 
-/* ── Progress bar ──────────────────────────────────────────────────── */
+/* ── Progress bar + retry message ─────────────────────────────────── */
+.progress-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .progress-track {
   width: 100%;
-  height: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 4px;
+  height: 6px;
+  background: rgba(0, 200, 160, 0.08);
+  border-radius: 3px;
   overflow: hidden;
 }
 
 .progress-bar {
   height: 100%;
-  background: linear-gradient(90deg, #cf8bf3, #fbc2eb);
-  border-radius: 4px;
-  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 0 10px rgba(251, 194, 235, 0.5);
+  background: linear-gradient(90deg, #00c8a0, #f59e0b);
+  border-radius: 3px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 10px rgba(0, 200, 160, 0.5);
 }
 
 .progress-bar.pulsing {
-  animation: pulseWidth 2s infinite alternate;
+  animation: pulseGlow 1.8s ease-in-out infinite alternate;
+}
+
+.retry-message {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--amber);
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+.retry-message.fixing {
+  color: #ff8f6b;
+}
+
+.retry-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--amber);
+  animation: dotPulse 1.2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+.retry-message.fixing .retry-dot {
+  background: #ff8f6b;
 }
 
 /* ── Code blocks ───────────────────────────────────────────────────── */
 .code-block {
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(0, 0, 0, 0.35);
   padding: 15px;
-  border-radius: 8px;
-  font-family: monospace;
-  font-size: 0.85rem;
-  color: #a7f3d0;
+  border-radius: 10px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.83rem;
+  color: #80ffd4;
   overflow-x: auto;
   white-space: pre-wrap;
-  border: 1px solid rgba(167, 243, 208, 0.1);
+  border: 1px solid rgba(0, 200, 160, 0.1);
+  line-height: 1.6;
 }
 
 .error-log {
-  color: #fca5a5;
-  border-color: rgba(252, 165, 165, 0.1);
+  color: #ff9aa5;
+  border-color: rgba(255, 95, 109, 0.15);
+  background: rgba(255, 0, 0, 0.05);
 }
 
 /* ── Animations ────────────────────────────────────────────────────── */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes pulseWidth {
-  0% { filter: brightness(1); }
-  100% { filter: brightness(1.3); }
+@keyframes pulseGlow {
+  0%   { box-shadow: 0 0 6px rgba(0, 200, 160, 0.4); filter: brightness(1); }
+  100% { box-shadow: 0 0 18px rgba(245, 158, 11, 0.6); filter: brightness(1.3); }
+}
+
+@keyframes dotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.6); }
+}
+
+/* ── Billing & Modal Styles ────────────────────────────────────────── */
+.pro-badge {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 6px;
+  margin-left: 8px;
+  vertical-align: middle;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.4);
+}
+
+.usage-counter {
+  font-size: 0.85rem;
+  color: var(--amber);
+  font-weight: 600;
+  padding: 6px 12px;
+  background: rgba(245, 158, 11, 0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(2, 13, 20, 0.8);
+  backdrop-filter: blur(8px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.modal-card {
+  width: 100%;
+  max-width: 450px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  text-align: center;
+  background: linear-gradient(135deg, rgba(5, 26, 46, 0.95), rgba(10, 22, 40, 0.95));
+  border: 1px solid var(--amber);
+  box-shadow: 0 0 40px rgba(245, 158, 11, 0.2);
+}
+
+.modal-card h2 {
+  color: var(--amber);
+}
+
+.pro-features {
+  text-align: left;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 15px 20px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.pro-features ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 15px;
+  margin-top: 10px;
+}
+
+.cancel-btn {
+  flex: 1;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+}
+
+.cancel-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  transform: none;
+  box-shadow: none;
+}
+
+.upgrade-btn {
+  flex: 2;
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #fff;
+  box-shadow: var(--amber-glow);
+}
+
+.upgrade-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  box-shadow: 0 0 30px rgba(245, 158, 11, 0.6);
 }

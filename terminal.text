@@ -1,0 +1,23 @@
+Terminal 1 — FastAPI Backend
+powershell
+.\venv\Scripts\activate
+uvicorn backend.main:app --reload
+→ Runs on http://127.0.0.1:8000 (Swagger docs at /docs)
+
+Terminal 2 — Celery Worker
+powershell
+.\venv\Scripts\activate
+celery -A backend.workers.tasks.celery_app worker --loglevel=info --pool=solo
+→ Processes jobs from Upstash Redis queue
+
+Terminal 3 — React Frontend
+powershell
+cd frontend
+npm run dev
+→ Runs on http://localhost:5173
+
+Bonus — Run the Test Suite (Terminal 4)
+powershell
+.\venv\Scripts\activate
+python -m tests.test_error_correction
+That's it! 🚀

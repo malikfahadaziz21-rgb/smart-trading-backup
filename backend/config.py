@@ -10,6 +10,12 @@ class Config:
     GITHUB_WORKFLOW_FILE = os.getenv("GITHUB_WORKFLOW_FILE", "compile.yml")
     
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+    AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY", "")
+
+    STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
+    STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY", "")
+    STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+    STRIPE_PRO_PRICE_ID = os.getenv("STRIPE_PRO_PRICE_ID", "")
     
     DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./smarttrade.db")
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")

@@ -30,6 +30,7 @@ async def get_history(
             "backtest_result": j.backtest_result,
             "script_content": j.script_content,
             "prompt": j.user_prompt,
+            "error_message": j.error_message,
         }
         for j in jobs
     ]
@@ -54,4 +55,5 @@ async def get_results(
         "backtest_result": job.backtest_result,
         "script_content": job.script_content,
         "prompt": job.user_prompt,
+        "error_message": job.error_message,
     }

@@ -28,16 +28,34 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [jobs, setJobs] = useState([])
 
+  // Billing state
+  const [billing, setBilling] = useState(null)
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+  const [checkoutLoading, setCheckoutLoading] = useState(false)
+
   const authHeaders = () => ({
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${token}`
   })
 
-  // Load job history from backend on login
+  // Load job history and billing from backend on login
   useEffect(() => {
     if (!token) return
     fetchHistory()
+    fetchBilling()
   }, [token])
+
+  const fetchBilling = async () => {
+    try {
+      const res = await fetch(`${API_URL}/billing/status`, { headers: authHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        setBilling(data)
+      }
+    } catch (e) {
+      console.error("Failed to fetch billing", e)
+    }
+  }
 
   const fetchHistory = async () => {
     try {
@@ -127,12 +145,35 @@ function App() {
     setToken('')
     setUsername('')
     setJobs([])
+    setBilling(null)
+  }
+
+  const handleCheckout = async () => {
+    setCheckoutLoading(true)
+    try {
+      const res = await fetch(`${API_URL}/billing/create-checkout`, {
+        method: 'POST',
+        headers: authHeaders()
+      })
+      const data = await res.json()
+      if (data.url) window.location.href = data.url
+    } catch (e) {
+      console.error(e)
+      alert("Failed to initiate checkout")
+    } finally {
+      setCheckoutLoading(false)
+    }
   }
 
   // ── Strategy submit ────────────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!prompt.trim()) return
+
+    if (billing && !billing.is_pro && billing.tries_remaining <= 0) {
+      setShowUpgradeModal(true)
+      return
+    }
 
     setLoading(true)
     try {
@@ -150,6 +191,9 @@ function App() {
         }
         setJobs(prev => [newJob, ...prev])
         setPrompt('')
+        fetchBilling() // Update limits
+      } else if (res.status === 429) {
+        setShowUpgradeModal(true)
       } else if (res.status === 401) {
         handleLogout()
       }
@@ -226,9 +270,26 @@ function App() {
         <div className="top-bar">
           <div>
             <h1>SmartTrade</h1>
-            <p className="subtitle">Welcome back, <strong>{username}</strong></p>
+            <p className="subtitle">
+              Welcome back, <strong>{username}</strong>
+              {billing && billing.is_pro && <span className="pro-badge">PRO</span>}
+            </p>
           </div>
-          <button className="logout-btn" onClick={handleLogout}>Logout</button>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            {billing && !billing.is_pro && (
+              <span className="usage-counter">
+                {billing.daily_used}/5 generations today
+              </span>
+            )}
+            {billing && billing.has_portal && (
+              <button className="logout-btn" onClick={async () => {
+                const res = await fetch(`${API_URL}/billing/create-portal`, { method: 'POST', headers: authHeaders() })
+                const data = await res.json()
+                if (data.url) window.location.href = data.url
+              }}>Billing</button>
+            )}
+            <button className="logout-btn" onClick={handleLogout}>Logout</button>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="input-container">
@@ -262,17 +323,25 @@ function App() {
               </div>
 
               {job.status !== 'completed' && job.status !== 'failed' && (
-                <div className="progress-track">
-                  <div
-                    className="progress-bar pulsing"
-                    style={{ width: `${STATUS_PROGRESS[job.status] || 0}%` }}
-                  ></div>
+                <div className="progress-wrapper">
+                  <div className="progress-track">
+                    <div
+                      className="progress-bar pulsing"
+                      style={{ width: `${STATUS_PROGRESS[job.status] || 0}%` }}
+                    ></div>
+                  </div>
+                  {job.error_message && (
+                    <div className={`retry-message ${job.error_message.toLowerCase().startsWith('fix') ? 'fixing' : ''}`}>
+                      <span className="retry-dot"></span>
+                      {job.error_message}
+                    </div>
+                  )}
                 </div>
               )}
 
               {job.status === 'failed' && job.compile_log && (
                 <div className="code-block error-log">
-                  <strong>Compilation Failed:</strong><br/>
+                  <strong>Compilation Failed:</strong><br />
                   {job.compile_log}
                 </div>
               )}
@@ -293,6 +362,28 @@ function App() {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {showUpgradeModal && (
+        <div className="modal-overlay">
+          <div className="glass-card modal-card">
+            <h2>Limit Reached</h2>
+            <p>You have used all 5 free script generations for today.</p>
+            <div className="pro-features">
+              <ul>
+                <li>✅ Unlimited script generations</li>
+                <li>✅ Priority compilation queue</li>
+                <li>✅ Full backtesting reports</li>
+              </ul>
+            </div>
+            <div className="modal-actions">
+              <button className="cancel-btn" onClick={() => setShowUpgradeModal(false)}>Close</button>
+              <button className="upgrade-btn" onClick={handleCheckout} disabled={checkoutLoading}>
+                {checkoutLoading ? 'Redirecting...' : 'Upgrade to Pro - $9.99/mo'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

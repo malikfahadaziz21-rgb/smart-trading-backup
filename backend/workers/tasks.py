@@ -1,5 +1,5 @@
 from celery import Celery
-from backend.services.llm_service import generate_mql5_script
+from backend.services.llm_service import generate_mql5_script, fix_mql5_script
 from backend.services.github_service import GitHubService
 from backend.services.backtest_service import run_backtest
 from backend.db.models import JobStatus, Job
@@ -21,6 +21,8 @@ celery_app.conf.redis_backend_use_ssl = {"ssl_cert_reqs": ssl.CERT_NONE}
 
 github = GitHubService()
 
+MAX_COMPILE_RETRIES = 3  # Maximum LLM fix attempts before giving up
+
 def update_job(job_id: str, db=None, **kwargs):
     close_db = False
     if db is None:
@@ -37,53 +39,80 @@ def update_job(job_id: str, db=None, **kwargs):
         if close_db:
             db.close()
 
+
+def compile_on_github(script_name: str, script_content: str):
+    """Push script to GitHub, trigger Actions, wait for result, return build log."""
+    # Push
+    pushed, push_error = github.push_script(script_name, script_content)
+    if not pushed:
+        raise Exception(f"Failed to push script to GitHub: {push_error}")
+
+    # Trigger workflow
+    triggered = github.trigger_workflow(script_name)
+    if not triggered:
+        raise Exception("Failed to trigger GitHub Actions workflow")
+
+    # Get the run ID
+    run_id = github.get_latest_run_id(script_name)
+
+    # Poll until done
+    result = github.poll_run_completion(run_id, timeout=300)
+    if not result["completed"]:
+        raise Exception("Compilation timed out")
+
+    # Download build log
+    build_log = github.download_build_log(run_id)
+    compile_success = "0 error" in build_log.lower()
+
+    return build_log, compile_success, run_id
+
+
 @celery_app.task
 def process_strategy_pipeline(job_id: str, prompt: str):
     try:
         # ── Step 1: Generate MQL5 script via LLM ─────────────────────
         update_job(job_id, status=JobStatus.GENERATING)
-        
-        # Wrapping async call since generate_mql5_script is async
         script_content, script_name = asyncio.run(generate_mql5_script(prompt, job_id))
-        
         update_job(job_id, script_content=script_content, script_name=script_name)
 
-        # ── Step 2: Push script to GitHub ────────────────────────────
-        pushed, push_error = github.push_script(script_name, script_content)
-        if not pushed:
-            raise Exception(f"Failed to push script to GitHub: {push_error}")
+        # ── Step 2: Compile → Check → Fix loop ───────────────────────
+        compile_success = False
+        build_log = ""
+        run_id = None
 
-        # ── Step 3: Trigger GitHub Actions compilation ────────────────
-        update_job(job_id, status=JobStatus.COMPILING)
-        triggered = github.trigger_workflow(script_name)
-        if not triggered:
-            raise Exception("Failed to trigger GitHub Actions workflow")
+        for attempt in range(1, MAX_COMPILE_RETRIES + 1):
+            update_job(job_id, status=JobStatus.COMPILING,
+                       error_message=f"Compilation attempt {attempt}/{MAX_COMPILE_RETRIES}")
 
-        # ── Step 4: Get the run ID ────────────────────────────────────
-        run_id = github.get_latest_run_id(script_name)
-        update_job(job_id, github_run_id=run_id)
+            build_log, compile_success, run_id = compile_on_github(script_name, script_content)
+            update_job(job_id, compile_log=build_log,
+                       compile_success="yes" if compile_success else "no",
+                       github_run_id=run_id)
 
-        # ── Step 5: Poll until compilation finishes ───────────────────
-        result = github.poll_run_completion(run_id, timeout=300)
-        if not result["completed"]:
-            raise Exception("Compilation timed out")
+            if compile_success:
+                break  # Compiled successfully!
 
-        # ── Step 6: Download and save build log ───────────────────────
-        build_log = github.download_build_log(run_id)
-        compile_success = "0 error" in build_log.lower()
-        
-        update_job(job_id, compile_log=build_log, compile_success="yes" if compile_success else "no")
+            # ── Compilation failed: ask LLM to fix ────────────────────
+            if attempt < MAX_COMPILE_RETRIES:
+                update_job(job_id, status=JobStatus.GENERATING,
+                           error_message=f"Fixing errors (attempt {attempt + 1}/{MAX_COMPILE_RETRIES})")
+
+                script_content = asyncio.run(
+                    fix_mql5_script(prompt, script_content, build_log, attempt + 1)
+                )
+                update_job(job_id, script_content=script_content)
 
         if not compile_success:
-            update_job(job_id, status=JobStatus.FAILED, error_message="Compilation failed." )
+            update_job(job_id, status=JobStatus.FAILED,
+                       error_message=f"Compilation failed after {MAX_COMPILE_RETRIES} attempts.")
             return
 
-        # ── Step 7: Parse strategy for backtesting ────────────────────
+        # ── Step 3: Backtesting ───────────────────────────────────────
         update_job(job_id, status=JobStatus.BACKTESTING)
         backtest_result = run_backtest(script_content, prompt)
         update_job(job_id, backtest_result=backtest_result)
 
-        # ── Step 8: Mark complete ─────────────────────────────────────
+        # ── Step 4: Done! ─────────────────────────────────────────────
         update_job(job_id, status=JobStatus.COMPLETED)
 
     except Exception as e:

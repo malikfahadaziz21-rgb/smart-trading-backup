@@ -21,6 +21,21 @@ async def generate_and_compile(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    from datetime import date
+    from fastapi import HTTPException
+    
+    # Enforce daily limit for free users
+    if not current_user.is_pro:
+        if current_user.last_used_date != date.today():
+            current_user.daily_used = 0
+            current_user.last_used_date = date.today()
+            
+        if current_user.daily_used >= 5:
+            raise HTTPException(status_code=429, detail="Daily limit reached. Please upgrade to Pro.")
+            
+        current_user.daily_used += 1
+        db.commit()
+
     # Create job linked to user
     job = await create_job(request.prompt, current_user.id, db)
     
